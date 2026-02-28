@@ -58,7 +58,17 @@ const allProducts = [
         image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBNuYqvcGHzZoeuUV1vzUiJRy7XrH7eSUEPdZHcC_0U8D0OBfAXaifDjoUQ0rGJfv1bHPgYhphNbwPYCPfpBXxyLhCRWRRuJ2TxPEvzzyu9ifiEZ8WhbSE4hHV7u9-XFndBotSZkki0OcZ5pMnzVIFVkMR_62SjB--o6-rvuTrbHXTHtwqSJ1nmd3yV7JIl829_C3ITuAMMj9Jln9VhzkJ-S79rgN4YMb26uyrk8-Hu-nBvQPqWfb5aL8vZBCNR6WexL23SdFJr0mI",
         description: "Dropped shoulders directly down with a structured drape.",
         tag: null
+    },
+    {
+        id: 7,
+        title: "Classic Fit Tee",
+        category: "T-Shirts",
+        price: "$22.00",
+        image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
+        description: "Simple everyday t-shirt with a clean regular fit.",
+        tag: null
     }
+
 ];
 
 const Catalog = () => {
