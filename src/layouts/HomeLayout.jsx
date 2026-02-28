@@ -1,5 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
+import AIChatbox from '../components/AIChatbox';
 
 const HomeLayout = () => {
     const navigate = useNavigate();
@@ -23,6 +24,10 @@ const HomeLayout = () => {
                         <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home">Home</Link>
                         <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/catalog">Catalog</Link>
                         <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/my-orders">My Orders</Link>
+                        <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors flex items-center gap-1" to="/home/virtual-try-on">
+                            <span className="material-symbols-outlined text-[16px]">checkroom</span>
+                            Virtual Try-On
+                        </Link>
                     </nav>
                     <div className="flex items-center gap-4">
                         {/* Search Icon */}
@@ -130,6 +135,7 @@ const HomeLayout = () => {
                     </div>
                 </div>
             </footer>
+            <AIChatbox />
         </div>
     );
 };

@@ -1,17 +1,44 @@
 import { useNavigate } from 'react-router-dom';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import html2canvas from 'html2canvas';
 
 const DesignEditor = () => {
     const navigate = useNavigate();
     const [zoom, setZoom] = useState(85);
     const [isAdded, setIsAdded] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [isTryingOn, setIsTryingOn] = useState(false);
+    const mockupRef = useRef(null);
 
     const handleAddToCart = () => {
         setIsAdded(true);
         setShowToast(true);
         setTimeout(() => setIsAdded(false), 2000);
         setTimeout(() => setShowToast(false), 4000);
+    };
+
+    const handleTryOn = async () => {
+        setIsTryingOn(true);
+        try {
+            if (mockupRef.current) {
+                const canvas = await html2canvas(mockupRef.current, {
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: null,
+                    scale: 2,
+                });
+                const dataUrl = canvas.toDataURL('image/png');
+                localStorage.setItem('pod_tryon_design', dataUrl);
+                navigate('/home/virtual-try-on');
+            }
+        } catch (err) {
+            console.error('Failed to capture design:', err);
+            // Fallback: use the t-shirt image URL directly
+            localStorage.setItem('pod_tryon_design', 'https://lh3.googleusercontent.com/aida-public/AB6AXuDXOBH11sjOJZgf-HI_Rc11_MqGEZatI6ZyvXVpjSc4O5K7-4lmPWMBlqCnkRFt-oCOHux0yRDIyztvyee1EDDtvHN7aVr6-y318SBpMWwGa4D40v3Jps-iEyByG9wW5rXoXddAAAx3qa8KsIsjD0CiCPwGgYqt9AZy1CfJDFVZw5amtcojSPm3IpY4h5TJcfGtdJMJ2wh4YyRkXfUt5rbXpbNtFm1C1JZq5aor2YYaiRDty8KF_xZYuRgHFWwuO2nxTTSibc2XSVE');
+            navigate('/home/virtual-try-on');
+        } finally {
+            setIsTryingOn(false);
+        }
     };
 
     return (
@@ -50,6 +77,15 @@ const DesignEditor = () => {
                     <div className="flex items-center gap-4 sm:gap-6 pr-4 sm:pr-6 border-r border-slate-200">
                         <button className="hidden sm:flex min-w-[84px] items-center justify-center rounded-lg h-9 px-4 border border-slate-300 hover:bg-slate-100 text-sm font-bold transition-all">
                             <span>Preview</span>
+                        </button>
+                        <button
+                            onClick={handleTryOn}
+                            disabled={isTryingOn}
+                            className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 bg-gradient-to-r from-primary/20 to-emerald-100 border border-primary/30 text-sm font-bold text-[#11221c] hover:from-primary/30 hover:to-emerald-200 transition-all gap-1.5 disabled:opacity-50"
+                            title="Try this design on your photo"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">{isTryingOn ? 'hourglass_top' : 'checkroom'}</span>
+                            <span>{isTryingOn ? 'Capturing...' : 'Try On 👕'}</span>
                         </button>
                         <button
                             onClick={handleAddToCart}
@@ -167,7 +203,7 @@ const DesignEditor = () => {
                     </div>
 
                     {/* Main Mockup Container */}
-                    <div className="relative w-full max-w-2xl aspect-[4/5] flex items-center justify-center">
+                    <div ref={mockupRef} className="relative w-full max-w-2xl aspect-[4/5] flex items-center justify-center">
                         {/* T-Shirt Image */}
                         <div className="absolute inset-0 bg-center bg-no-repeat bg-contain drop-shadow-2xl" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDXOBH11sjOJZgf-HI_Rc11_MqGEZatI6ZyvXVpjSc4O5K7-4lmPWMBlqCnkRFt-oCOHux0yRDIyztvyee1EDDtvHN7aVr6-y318SBpMWwGa4D40v3Jps-iEyByG9wW5rXoXddAAAx3qa8KsIsjD0CiCPwGgYqt9AZy1CfJDFVZw5amtcojSPm3IpY4h5TJcfGtdJMJ2wh4YyRkXfUt5rbXpbNtFm1C1JZq5aor2YYaiRDty8KF_xZYuRgHFWwuO2nxTTSibc2XSVE")' }}>
                         </div>

@@ -21,6 +21,7 @@ import AuthLayout from './components/AuthLayout';
 import UserLogin from './pages/UserLogin';
 import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
+import VirtualTryOn from './pages/VirtualTryOn';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -46,6 +47,7 @@ function App() {
           <Route path="order-success" element={<OrderSuccess />} />
           <Route path="my-orders" element={<OrderHistory />} />
           <Route path="profile" element={<UserProfile />} />
+          <Route path="virtual-try-on" element={<VirtualTryOn />} />
         </Route>
 
         {/* Customer Auth Routes */}
