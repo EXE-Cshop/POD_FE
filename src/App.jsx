@@ -22,6 +22,7 @@ import UserLogin from './pages/UserLogin';
 import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
 import VirtualTryOn from './pages/VirtualTryOn';
+import AddProduct from './pages/AddProduct';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -63,6 +64,7 @@ function App() {
             <Route path="users" element={<UserDirectory />} />
             <Route path="orders" element={<PrintQueue />} />
             <Route path="base-products" element={<Inventory />} />
+            <Route path="base-products/add" element={<AddProduct />} />
             <Route path="print-areas" element={<PrintAreas />} />
             <Route path="roles" element={<Roles />} />
           </Route>

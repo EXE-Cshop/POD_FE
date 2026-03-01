@@ -1,12 +1,23 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Inventory = () => {
+    const navigate = useNavigate();
     return (
         <div className="flex-1 overflow-auto max-w-[1200px] mx-auto py-8 px-4 text-slate-900 ">
             {/* Section Header */}
-            <div className="mb-6">
-                <h1 className="text-slate-900  text-3xl font-extrabold tracking-tight">Base Product Management</h1>
-                <p className="text-slate-500  mt-1">Configure blank merchandise and define printable zones for the customization engine.</p>
+            <div className="mb-6 flex items-center justify-between">
+                <div>
+                    <h1 className="text-slate-900  text-3xl font-extrabold tracking-tight">Base Product Management</h1>
+                    <p className="text-slate-500  mt-1">Configure blank merchandise and define printable zones for the customization engine.</p>
+                </div>
+                <button
+                    onClick={() => navigate('/admin/base-products/add')}
+                    className="h-11 px-6 bg-slate-900 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"
+                >
+                    <span className="material-symbols-outlined text-sm">add</span>
+                    Add New Product
+                </button>
             </div>
 
             {/* Tabs Navigation */}

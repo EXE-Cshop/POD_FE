@@ -9,6 +9,12 @@ const allProducts = [
         category: "T-Shirts",
         price: "$24.00",
         image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
+        colorMockups: {
+            "Black": "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
+            "White": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop",
+            "Navy": "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=1080&auto=format&fit=crop",
+            "Red": "https://images.unsplash.com/photo-1583743814966-8936f5b721fa?q=80&w=1080&auto=format&fit=crop"
+        },
         description: "Ultra-soft 100% ringspun cotton with a modern relaxed fit.",
         tag: "Best Seller",
         tagColor: "bg-primary text-[#11221c]"
@@ -19,6 +25,11 @@ const allProducts = [
         category: "Hoodies",
         price: "$45.00",
         image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDCpEj-7DL9XRZPH4kEOoLjpSVJULmPWAkdUzOsLdthGk1OMyhLpfFrszA3VyuqppkQDGblSrqYI6F1dHJDQnB15hxvQIpLceY-Xja_BLgoN5uQ1Rb4HlqrCdXrbMtoW6GHDrjB6j35Dzm1HOWEAcJsSUskaQSbP61F4d4XhQwwnYpfNel5CTBy2FFwAyocH-WoOANJ6TsUD8mY81o_WnVsoRW0TZeUV3z-waocdXrCfTDapjJnMWDxsQF1KUjid1ujGCA2H_r_tYY",
+        colorMockups: {
+            "Black": "https://lh3.googleusercontent.com/aida-public/AB6AXuDCpEj-7DL9XRZPH4kEOoLjpSVJULmPWAkdUzOsLdthGk1OMyhLpfFrszA3VyuqppkQDGblSrqYI6F1dHJDQnB15hxvQIpLceY-Xja_BLgoN5uQ1Rb4HlqrCdXrbMtoW6GHDrjB6j35Dzm1HOWEAcJsSUskaQSbP61F4d4XhQwwnYpfNel5CTBy2FFwAyocH-WoOANJ6TsUD8mY81o_WnVsoRW0TZeUV3z-waocdXrCfTDapjJnMWDxsQF1KUjid1ujGCA2H_r_tYY",
+            "White": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=1080&auto=format&fit=crop",
+            "Navy": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=1080&auto=format&fit=crop"
+        },
         description: "Double-lined hood and spacious pouch pocket for ultimate comfort.",
         tag: "New Arrival",
         tagColor: "bg-slate-800 text-white"
@@ -29,6 +40,10 @@ const allProducts = [
         category: "Mugs",
         price: "$12.00",
         image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBcWFjI8XBegFLDDWDZmE_USMLx2E278vt7nuRFKQwDt6mDO_INQVvwxHjFlac8n_VpvMAD4X7iZbMlVBoZLEVqbM77yqesWevjAqElTJiwZQHBCaE4jDz3wMYt6NitdZSmp608ooYkJURN7g74yPAcVI9KDfIt2hKN2dV2DCcQ_X-55PyveyOSQXNvgtlPCzwWrLIORxEr1YVCYF_YGz4dG6MSdw_EyI2GCvDTu137wLiN367HCLGLHv9xTyBODrOR-8711xgY-4s",
+        colorMockups: {
+            "White": "https://lh3.googleusercontent.com/aida-public/AB6AXuBcWFjI8XBegFLDDWDZmE_USMLx2E278vt7nuRFKQwDt6mDO_INQVvwxHjFlac8n_VpvMAD4X7iZbMlVBoZLEVqbM77yqesWevjAqElTJiwZQHBCaE4jDz3wMYt6NitdZSmp608ooYkJURN7g74yPAcVI9KDfIt2hKN2dV2DCcQ_X-55PyveyOSQXNvgtlPCzwWrLIORxEr1YVCYF_YGz4dG6MSdw_EyI2GCvDTu137wLiN367HCLGLHv9xTyBODrOR-8711xgY-4s",
+            "Black": "https://images.unsplash.com/photo-1514228742587-6b1558fbed50?q=80&w=1080&auto=format&fit=crop"
+        },
         description: "Vibrant, high-gloss finish perfect for your favorite morning brew.",
         tag: null
     },
@@ -56,6 +71,10 @@ const allProducts = [
         category: "T-Shirts",
         price: "$28.00",
         image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBNuYqvcGHzZoeuUV1vzUiJRy7XrH7eSUEPdZHcC_0U8D0OBfAXaifDjoUQ0rGJfv1bHPgYhphNbwPYCPfpBXxyLhCRWRRuJ2TxPEvzzyu9ifiEZ8WhbSE4hHV7u9-XFndBotSZkki0OcZ5pMnzVIFVkMR_62SjB--o6-rvuTrbHXTHtwqSJ1nmd3yV7JIl829_C3ITuAMMj9Jln9VhzkJ-S79rgN4YMb26uyrk8-Hu-nBvQPqWfb5aL8vZBCNR6WexL23SdFJr0mI",
+        colorMockups: {
+            "White": "https://lh3.googleusercontent.com/aida-public/AB6AXuBNuYqvcGHzZoeuUV1vzUiJRy7XrH7eSUEPdZHcC_0U8D0OBfAXaifDjoUQ0rGJfv1bHPgYhphNbwPYCPfpBXxyLhCRWRRuJ2TxPEvzzyu9ifiEZ8WhbSE4hHV7u9-XFndBotSZkki0OcZ5pMnzVIFVkMR_62SjB--o6-rvuTrbHXTHtwqSJ1nmd3yV7JIl829_C3ITuAMMj9Jln9VhzkJ-S79rgN4YMb26uyrk8-Hu-nBvQPqWfb5aL8vZBCNR6WexL23SdFJr0mI",
+            "Black": "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=1080&auto=format&fit=crop"
+        },
         description: "Dropped shoulders directly down with a structured drape.",
         tag: null
     },
@@ -65,6 +84,10 @@ const allProducts = [
         category: "T-Shirts",
         price: "$22.00",
         image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
+        colorMockups: {
+            "White": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
+            "Black": "https://images.unsplash.com/photo-1583743814966-8936f5b721fa?q=80&w=1080&auto=format&fit=crop"
+        },
         description: "Simple everyday t-shirt with a clean regular fit.",
         tag: null
     }
@@ -76,33 +99,51 @@ const Catalog = () => {
     const [searchParams, setSearchParams] = useSearchParams();
 
     const [selectedCategory, setSelectedCategory] = useState('All');
+    const [selectedColor, setSelectedColor] = useState('All');
     const [filteredProducts, setFilteredProducts] = useState(allProducts);
 
     // Sync URL parameter with local state
-    // Ex: ?category=T-Shirts
     useEffect(() => {
         const cat = searchParams.get('category');
-        if (cat) {
-            setSelectedCategory(cat);
-        } else {
-            setSelectedCategory('All');
-        }
+        const color = searchParams.get('color');
+
+        if (cat) setSelectedCategory(cat);
+        else setSelectedCategory('All');
+
+        if (color) setSelectedColor(color);
+        else setSelectedColor('All');
     }, [searchParams]);
 
-    // Filter products when selectedCategory changes
+    // Filter products when selectedCategory or selectedColor changes
     useEffect(() => {
-        if (selectedCategory === 'All') {
-            setFilteredProducts(allProducts);
-        } else {
-            setFilteredProducts(allProducts.filter(p => p.category === selectedCategory));
+        let filtered = allProducts;
+
+        if (selectedCategory !== 'All') {
+            filtered = filtered.filter(p => p.category === selectedCategory);
         }
-    }, [selectedCategory]);
+
+        if (selectedColor !== 'All') {
+            // Only show products that have this color available
+            filtered = filtered.filter(p => p.colorMockups && p.colorMockups[selectedColor]);
+        }
+
+        setFilteredProducts(filtered);
+    }, [selectedCategory, selectedColor]);
 
     const handleCategoryClick = (category) => {
         if (category === 'All') {
             searchParams.delete('category');
         } else {
             searchParams.set('category', category);
+        }
+        setSearchParams(searchParams);
+    };
+
+    const handleColorClick = (color) => {
+        if (color === 'All') {
+            searchParams.delete('color');
+        } else {
+            searchParams.set('color', color);
         }
         setSearchParams(searchParams);
     };
@@ -178,16 +219,34 @@ const Catalog = () => {
                         <div>
                             <h3 className="text-slate-900 text-sm font-bold uppercase tracking-wider mb-4">Filter by Color</h3>
                             <div className="flex flex-wrap gap-3">
-                                <button className="size-8 rounded-full border-2 border-slate-200 bg-black" title="Black"></button>
-                                <button className="size-8 rounded-full border-2 border-slate-200 bg-white" title="White"></button>
-                                <button className="size-8 rounded-full bg-blue-600" title="Navy"></button>
-                                <button className="size-8 rounded-full bg-red-600" title="Red"></button>
-                                <button className="size-8 rounded-full bg-gray-500" title="Heather Gray"></button>
+                                <button
+                                    onClick={() => handleColorClick('Black')}
+                                    className={`size-8 rounded-full border-2 transition-all ${selectedColor === 'Black' ? 'border-primary ring-2 ring-primary/30 ring-offset-2' : 'border-slate-200'} bg-black`}
+                                    title="Black"
+                                ></button>
+                                <button
+                                    onClick={() => handleColorClick('White')}
+                                    className={`size-8 rounded-full border-2 transition-all ${selectedColor === 'White' ? 'border-primary ring-2 ring-primary/30 ring-offset-2' : 'border-slate-200'} bg-white`}
+                                    title="White"
+                                ></button>
+                                <button
+                                    onClick={() => handleColorClick('Navy')}
+                                    className={`size-8 rounded-full border-2 transition-all ${selectedColor === 'Navy' ? 'border-primary ring-2 ring-primary/30 ring-offset-2' : 'border-blue-600'} bg-blue-900`}
+                                    title="Navy"
+                                ></button>
+                                <button
+                                    onClick={() => handleColorClick('Red')}
+                                    className={`size-8 rounded-full border-2 transition-all ${selectedColor === 'Red' ? 'border-primary ring-2 ring-primary/30 ring-offset-2' : 'border-red-600'} bg-red-600`}
+                                    title="Red"
+                                ></button>
                             </div>
                         </div>
 
                         <button
-                            onClick={() => handleCategoryClick('All')}
+                            onClick={() => {
+                                handleCategoryClick('All');
+                                handleColorClick('All');
+                            }}
                             className="w-full flex items-center justify-center gap-2 rounded-lg h-11 bg-slate-200 text-slate-900 text-sm font-bold hover:bg-slate-300 transition-colors mt-4"
                         >
                             <span className="material-symbols-outlined text-sm">filter_alt_off</span>
@@ -200,7 +259,7 @@ const Catalog = () => {
                 <div className="flex-1">
                     {filteredProducts.length === 0 ? (
                         <div className="w-full py-20 flex items-center justify-center text-slate-500">
-                            No products found in this category.
+                            No products found matching your selection.
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -213,7 +272,7 @@ const Catalog = () => {
                                     <div className="relative aspect-[4/5] overflow-hidden bg-slate-100 cursor-pointer" onClick={() => navigate(`/home/product/${product.id}`)}>
                                         <img
                                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                            src={product.image}
+                                            src={(selectedColor !== 'All' && product.colorMockups && product.colorMockups[selectedColor]) ? product.colorMockups[selectedColor] : product.image}
                                             alt={product.title}
                                         />
                                         {product.tag && (

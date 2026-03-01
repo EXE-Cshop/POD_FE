@@ -9,8 +9,19 @@ const ProductDetails = () => {
     const [quantity, setQuantity] = useState(1);
     const [isAdded, setIsAdded] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [errorToast, setErrorToast] = useState(false);
 
-    // Mock data for a single product
+    // Mock stock data
+    const stockData = {
+        'Black-M': 10,
+        'Black-L': 0, // Out of stock example
+        'White-S': 5,
+        'Navy-XL': 0, // Out of stock example
+    };
+
+    const isOutOfStock = stockData[`${selectedColor}-${selectedSize}`] === 0;
+
+    // Mock data for a single product with color mockups
     const product = {
         id: id || 1,
         title: "Classic Heavyweight Tee",
@@ -24,18 +35,40 @@ const ProductDetails = () => {
         ],
         images: [
             "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
-            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop"
+            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=1080&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1583743814966-8936f5b721fa?q=80&w=1080&auto=format&fit=crop"
         ],
+        colorMockups: {
+            "Black": "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
+            "White": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop",
+            "Navy": "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=1080&auto=format&fit=crop",
+            "Red": "https://images.unsplash.com/photo-1583743814966-8936f5b721fa?q=80&w=1080&auto=format&fit=crop"
+        },
         colors: [
             { name: "Black", hex: "#000000" },
             { name: "White", hex: "#ffffff" },
             { name: "Navy", hex: "#1e3a8a" },
-            { name: "Heather Gray", hex: "#9ca3af" }
+            { name: "Red", hex: "#ef4444" }
         ],
         sizes: ["S", "M", "L", "XL", "2XL"]
     };
 
+    const [mainImage, setMainImage] = useState(product.colorMockups[selectedColor] || product.images[0]);
+
+    const handleColorSelect = (color) => {
+        setSelectedColor(color.name);
+        if (product.colorMockups[color.name]) {
+            setMainImage(product.colorMockups[color.name]);
+        }
+    };
+
     const handleAddToCart = () => {
+        if (isOutOfStock) {
+            setErrorToast(true);
+            setTimeout(() => setErrorToast(false), 4000);
+            return;
+        }
         setIsAdded(true);
         setShowToast(true);
         setTimeout(() => setIsAdded(false), 2000);
@@ -57,11 +90,15 @@ const ProductDetails = () => {
                 {/* Image Gallery */}
                 <div className="w-full lg:w-1/2 flex flex-col gap-4">
                     <div className="aspect-[4/5] md:aspect-square bg-slate-100 rounded-2xl overflow-hidden border border-slate-200">
-                        <img src={product.images[0]} alt={product.title} className="w-full h-full object-cover" />
+                        <img src={mainImage} alt={product.title} className="w-full h-full object-cover transition-all duration-500" />
                     </div>
                     <div className="grid grid-cols-4 gap-4">
                         {product.images.map((img, idx) => (
-                            <div key={idx} className={`aspect-square rounded-lg overflow-hidden border-2 cursor-pointer ${idx === 0 ? 'border-primary' : 'border-slate-200 hover:border-slate-300'}`}>
+                            <div
+                                key={idx}
+                                onClick={() => setMainImage(img)}
+                                className={`aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${mainImage === img ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200 hover:border-slate-300'}`}
+                            >
                                 <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
                             </div>
                         ))}
@@ -88,7 +125,7 @@ const ProductDetails = () => {
                             {product.colors.map(color => (
                                 <button
                                     key={color.name}
-                                    onClick={() => setSelectedColor(color.name)}
+                                    onClick={() => handleColorSelect(color)}
                                     className={`size-10 rounded-full border-2 focus:outline-none transition-all ${selectedColor === color.name ? 'border-primary ring-2 ring-primary/30 ring-offset-2' : 'border-slate-300 hover:border-slate-400'}`}
                                     style={{ backgroundColor: color.hex }}
                                     title={color.name}
@@ -140,16 +177,18 @@ const ProductDetails = () => {
                         </div>
                         <button
                             onClick={handleAddToCart}
-                            disabled={isAdded}
+                            disabled={isAdded || isOutOfStock}
                             className={`flex-1 h-14 rounded-lg font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2 ${isAdded
-                                    ? 'bg-primary text-[#11221c] shadow-[0_0_20px_rgba(20,200,100,0.3)]'
+                                ? 'bg-primary text-[#11221c] shadow-[0_0_20px_rgba(20,200,100,0.3)]'
+                                : isOutOfStock
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
                                     : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl'
                                 }`}
                         >
                             <span className="material-symbols-outlined text-[20px]">
-                                {isAdded ? 'check_circle' : 'shopping_cart'}
+                                {isAdded ? 'check_circle' : isOutOfStock ? 'inventory_2' : 'shopping_cart'}
                             </span>
-                            {isAdded ? 'Added to Cart!' : 'Add to Cart'}
+                            {isAdded ? 'Added to Cart!' : isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
                         </button>
                     </div>
 
@@ -185,6 +224,7 @@ const ProductDetails = () => {
                     </div>
                 </div>
             </div>
+
             {/* Toast Notification */}
             <div className={`fixed bottom-8 right-8 z-50 transition-all duration-500 transform ${showToast ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
                 <div className="bg-slate-900 border border-slate-700 text-white p-4 rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.3)] flex items-center gap-4 min-w-[320px]">
@@ -202,6 +242,22 @@ const ProductDetails = () => {
                         View Cart
                     </button>
                     <button onClick={() => setShowToast(false)} className="text-slate-500 hover:text-white transition-colors absolute top-2 right-2">
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Error Toast */}
+            <div className={`fixed bottom-8 right-8 z-50 transition-all duration-500 transform ${errorToast ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+                <div className="bg-red-950 border border-red-900 text-white p-4 rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.3)] flex items-center gap-4 min-w-[320px]">
+                    <div className="size-10 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-[24px]">error</span>
+                    </div>
+                    <div className="flex-1">
+                        <h4 className="font-bold text-red-200 text-sm">Inventory Error</h4>
+                        <p className="text-xs text-red-300/70 mt-0.5">The selected variant is currently out of stock.</p>
+                    </div>
+                    <button onClick={() => setErrorToast(false)} className="text-red-400 hover:text-white transition-colors absolute top-2 right-2">
                         <span className="material-symbols-outlined text-[16px]">close</span>
                     </button>
                 </div>
