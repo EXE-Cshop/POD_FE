@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import AIChatbox from '../components/AIChatbox';
 
 const DesignEditor = () => {
     const navigate = useNavigate();
@@ -15,6 +16,31 @@ const DesignEditor = () => {
         setShowToast(true);
         setTimeout(() => setIsAdded(false), 2000);
         setTimeout(() => setShowToast(false), 4000);
+    };
+
+    const [isReviewingDesign, setIsReviewingDesign] = useState(false);
+
+    // AI Review: capture design and send to chatbot
+    const handleAIReview = async () => {
+        setIsReviewingDesign(true);
+        try {
+            if (mockupRef.current) {
+                const canvas = await html2canvas(mockupRef.current, {
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#ffffff',
+                    scale: 1,
+                });
+                const dataUrl = canvas.toDataURL('image/png');
+                localStorage.setItem('pod_design_for_review', dataUrl);
+                // Dispatch custom event for AIChatbox to pick up
+                window.dispatchEvent(new CustomEvent('pod-design-review', { detail: { image: dataUrl } }));
+            }
+        } catch (err) {
+            console.error('Failed to capture design for review:', err);
+        } finally {
+            setIsReviewingDesign(false);
+        }
     };
 
     const handleTryOn = async () => {
@@ -77,6 +103,15 @@ const DesignEditor = () => {
                     <div className="flex items-center gap-4 sm:gap-6 pr-4 sm:pr-6 border-r border-slate-200">
                         <button className="hidden sm:flex min-w-[84px] items-center justify-center rounded-lg h-9 px-4 border border-slate-300 hover:bg-slate-100 text-sm font-bold transition-all">
                             <span>Preview</span>
+                        </button>
+                        <button
+                            onClick={handleAIReview}
+                            disabled={isReviewingDesign}
+                            className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 bg-gradient-to-r from-purple-500/20 to-pink-100 border border-purple-500/30 text-sm font-bold text-purple-900 hover:from-purple-500/30 hover:to-pink-200 transition-all gap-1.5 disabled:opacity-50"
+                            title="AI reviews your design"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">{isReviewingDesign ? 'hourglass_top' : 'auto_awesome'}</span>
+                            <span>{isReviewingDesign ? 'Capturing...' : '🤖 AI Review'}</span>
                         </button>
                         <button
                             onClick={handleTryOn}
@@ -352,6 +387,7 @@ const DesignEditor = () => {
                     </button>
                 </div>
             </div>
+            <AIChatbox />
         </div>
     );
 };

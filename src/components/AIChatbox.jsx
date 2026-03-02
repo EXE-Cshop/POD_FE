@@ -1,55 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const AI_RESPONSES = {
-    size: {
-        keywords: ['size', 'kích thước', 'cỡ', 'vừa', 'fit', 'sizing', 'bảng size'],
-        reply: "📏 Đây là hướng dẫn chọn size:\n\n• **S**: Ngực 86-90cm, Cao 155-165cm\n• **M**: Ngực 90-96cm, Cao 160-170cm\n• **L**: Ngực 96-102cm, Cao 165-175cm\n• **XL**: Ngực 102-108cm, Cao 170-180cm\n• **2XL**: Ngực 108-114cm, Cao 175-185cm\n\nBạn nặng bao nhiêu kg và cao bao nhiêu? Mình sẽ tư vấn size phù hợp nhất! 😊"
-    },
-    style: {
-        keywords: ['kiểu', 'style', 'mẫu', 'đẹp', 'hợp', 'phối', 'phù hợp', 'nên mặc', 'gợi ý', 'recommend'],
-        reply: "👕 Gợi ý phối đồ theo dáng người:\n\n• **Dáng gầy**: Áo oversize/relaxed fit, tạo cảm giác đầy đặn hơn\n• **Dáng cân đối**: Regular fit hoặc Slim fit đều hợp\n• **Dáng đầy đặn**: Áo regular fit, tránh quá ôm sát\n\n🎨 Màu yêu thích của bạn là gì? Mình sẽ gợi ý thiết kế phù hợp!"
-    },
-    shipping: {
-        keywords: ['ship', 'giao', 'delivery', 'vận chuyển', 'bao lâu', 'ngày'],
-        reply: "🚚 Thông tin giao hàng:\n\n• **Nội thành**: 1-2 ngày làm việc\n• **Ngoại thành**: 3-5 ngày làm việc\n• **Miễn phí ship** cho đơn từ 500K\n\nBạn cần biết thêm gì không? 😊"
-    },
-    order: {
-        keywords: ['đơn hàng', 'order', 'tracking', 'theo dõi', 'trạng thái'],
-        reply: "📦 Để kiểm tra đơn hàng, bạn vào mục **My Orders** trên thanh navigation nhé!\n\nNếu cần hỗ trợ thêm về đơn hàng, bạn cho mình mã đơn hàng nhé! 🔍"
-    },
-    design: {
-        keywords: ['thiết kế', 'design', 'custom', 'tùy chỉnh', 'in', 'print'],
-        reply: "🎨 Bạn có thể tự thiết kế áo tại **Design Editor**!\n\n1. Chọn sản phẩm từ Catalog\n2. Nhấn \"Customize This Product\"\n3. Upload hình, thêm text, chọn màu\n4. Nhấn **Try On** để xem trước trên người bạn!\n\nBắt đầu thiết kế ngay nhé? 🚀"
-    },
-    tryon: {
-        keywords: ['thử', 'try on', 'try-on', 'virtual', 'thử đồ', 'mặc thử'],
-        reply: "👗 Tính năng **Virtual Try-On** cho phép bạn:\n\n1. Thiết kế áo ở Design Editor\n2. Nhấn nút \"Try On\" để chụp thiết kế\n3. Upload ảnh cá nhân\n4. Xem áo đã thiết kế trên người bạn!\n\nHãy thử ngay tại trang Virtual Try-On nhé! ✨"
-    },
-    greeting: {
-        keywords: ['hi', 'hello', 'xin chào', 'chào', 'hey', 'alo'],
-        reply: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn:\n• 📏 Tư vấn chọn size phù hợp\n• 👕 Gợi ý kiểu áo hợp dáng\n• 🎨 Hướng dẫn thiết kế\n• 🚚 Thông tin giao hàng\n\nBạn cần hỗ trợ gì nhé?"
-    }
-};
+const API_URL = 'http://localhost:8080/api/v1/chatbot';
 
 const QUICK_ACTIONS = [
-    { label: '📏 Tư vấn Size', keyword: 'size' },
-    { label: '👕 Gợi ý Style', keyword: 'style' },
-    { label: '🎨 Hướng dẫn thiết kế', keyword: 'design' },
-    { label: '👗 Thử đồ ảo', keyword: 'tryon' },
-    { label: '🚚 Giao hàng', keyword: 'shipping' },
+    { label: '📏 Tư vấn Size', message: 'Tư vấn chọn size áo cho tôi' },
+    { label: '🎨 Hướng dẫn thiết kế', message: 'Hướng dẫn dùng Design Editor' },
+    { label: '👗 Thử đồ ảo', message: 'Hướng dẫn thử đồ ảo Virtual Try-On' },
+    { label: '🚚 Giao hàng', message: 'Thông tin giao hàng' },
+    { label: '🛒 Cách đặt hàng', message: 'Hướng dẫn cách đặt hàng' },
 ];
-
-function getAIReply(message) {
-    const lower = message.toLowerCase();
-    for (const [, data] of Object.entries(AI_RESPONSES)) {
-        for (const kw of data.keywords) {
-            if (lower.includes(kw)) {
-                return data.reply;
-            }
-        }
-    }
-    return "Cảm ơn bạn đã nhắn! 😊 Mình có thể hỗ trợ bạn về:\n• Tư vấn size & style\n• Hướng dẫn thiết kế\n• Thử đồ ảo\n• Thông tin giao hàng & đơn hàng\n\nBạn quan tâm chủ đề nào nhé?";
-}
 
 const AIChatbox = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -57,13 +16,14 @@ const AIChatbox = () => {
         {
             id: 1,
             sender: 'bot',
-            text: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn tư vấn size, kiểu áo phù hợp, hoặc hướng dẫn thiết kế.\n\nBạn cần hỗ trợ gì nhé?",
+            text: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn:\n• 📏 Tư vấn chọn size phù hợp\n• 🎨 Hướng dẫn thiết kế áo\n• 👗 Hướng dẫn thử đồ ảo\n• 🚚 Thông tin giao hàng & đơn hàng\n• 🖼️ **Đánh giá thiết kế** — gửi ảnh áo để AI review!\n\nBạn cần hỗ trợ gì nhé?",
             time: new Date()
         }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [hasUnread, setHasUnread] = useState(true);
+    const [designImage, setDesignImage] = useState(null); // base64 design image for review
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -78,8 +38,93 @@ const AIChatbox = () => {
         }
     }, [isOpen]);
 
-    const sendMessage = (text) => {
-        if (!text.trim()) return;
+    // Listen for design review event from DesignEditor
+    useEffect(() => {
+        const handleDesignReview = (e) => {
+            const imageData = e.detail?.image || localStorage.getItem('pod_design_for_review');
+            if (imageData) {
+                setDesignImage(imageData);
+                setIsOpen(true);
+                // Auto-send review request
+                setTimeout(() => {
+                    sendDesignReview(imageData, 'Hãy đánh giá thiết kế áo này giúp mình! Nhận xét về bố cục, phối màu, tỉ lệ và cho gợi ý cải thiện.');
+                }, 500);
+            }
+        };
+
+        window.addEventListener('pod-design-review', handleDesignReview);
+        return () => window.removeEventListener('pod-design-review', handleDesignReview);
+    }, []);
+
+    const buildHistory = (currentMessages) => {
+        return currentMessages
+            .filter(m => m.id !== 1)
+            .map(m => ({
+                role: m.sender === 'user' ? 'user' : 'assistant',
+                content: m.text
+            }));
+    };
+
+    // Send design image for AI review
+    const sendDesignReview = async (imageData, text) => {
+        if (isTyping) return;
+
+        const userMsg = {
+            id: Date.now(),
+            sender: 'user',
+            text: text,
+            image: imageData, // store image for display
+            time: new Date()
+        };
+
+        const newMessages = [...messages, userMsg];
+        setMessages(newMessages);
+        setIsTyping(true);
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    history: buildHistory(newMessages).slice(-6),
+                    image: imageData,
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            const data = await response.json();
+
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                sender: 'bot',
+                text: data.reply || 'Xin lỗi, mình không nhận được phản hồi.',
+                time: new Date()
+            }]);
+        } catch (error) {
+            console.error('Design review error:', error);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                sender: 'bot',
+                text: 'Xin lỗi, mình đang gặp sự cố. Vui lòng thử lại sau nhé! 😊',
+                time: new Date()
+            }]);
+        } finally {
+            setIsTyping(false);
+            setDesignImage(null);
+            localStorage.removeItem('pod_design_for_review');
+        }
+    };
+
+    const sendMessage = async (text) => {
+        if (!text.trim() || isTyping) return;
+
+        // Check if there's a pending design image to review
+        if (designImage) {
+            sendDesignReview(designImage, text.trim());
+            setInputValue('');
+            return;
+        }
 
         const userMsg = {
             id: Date.now(),
@@ -87,21 +132,43 @@ const AIChatbox = () => {
             text: text.trim(),
             time: new Date()
         };
-        setMessages(prev => [...prev, userMsg]);
+
+        const newMessages = [...messages, userMsg];
+        setMessages(newMessages);
         setInputValue('');
         setIsTyping(true);
 
-        setTimeout(() => {
-            const reply = getAIReply(text);
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text.trim(),
+                    history: buildHistory(newMessages).slice(-10),
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            const data = await response.json();
+
             setMessages(prev => [...prev, {
                 id: Date.now() + 1,
                 sender: 'bot',
-                text: reply,
+                text: data.reply || 'Xin lỗi, mình không nhận được phản hồi.',
                 time: new Date()
             }]);
+        } catch (error) {
+            console.error('Chatbot error:', error);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                sender: 'bot',
+                text: 'Xin lỗi, mình đang gặp sự cố kết nối. Vui lòng thử lại sau nhé! 😊',
+                time: new Date()
+            }]);
+        } finally {
             setIsTyping(false);
             if (!isOpen) setHasUnread(true);
-        }, 800 + Math.random() * 1200);
+        }
     };
 
     const handleSubmit = (e) => {
@@ -109,15 +176,23 @@ const AIChatbox = () => {
         sendMessage(inputValue);
     };
 
-    const handleQuickAction = (keyword) => {
-        const labels = {
-            size: 'Tư vấn size cho tôi',
-            style: 'Gợi ý kiểu áo phù hợp',
-            design: 'Hướng dẫn thiết kế',
-            tryon: 'Thử đồ ảo như thế nào?',
-            shipping: 'Thông tin giao hàng',
-        };
-        sendMessage(labels[keyword] || keyword);
+    const handleQuickAction = (message) => {
+        sendMessage(message);
+    };
+
+    // Manual design review — load from localStorage
+    const handleDesignReviewClick = () => {
+        const savedDesign = localStorage.getItem('pod_design_for_review') || localStorage.getItem('pod_tryon_design');
+        if (savedDesign) {
+            sendDesignReview(savedDesign, 'Hãy đánh giá thiết kế áo này giúp mình! Nhận xét về bố cục, phối màu, tỉ lệ và cho gợi ý cải thiện.');
+        } else {
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                sender: 'bot',
+                text: '⚠️ Chưa có thiết kế nào để đánh giá. Hãy vào **Design Editor** và bấm nút **🤖 AI Review** trên thanh công cụ để gửi thiết kế cho mình nhé!',
+                time: new Date()
+            }]);
+        }
     };
 
     const formatMessage = (text) => {
@@ -174,7 +249,9 @@ const AIChatbox = () => {
                         </div>
                         <div className="flex-1">
                             <h3 className="text-white font-bold text-sm">POD Print AI</h3>
-                            <p className="text-emerald-400 text-xs font-medium">Online — Sẵn sàng tư vấn</p>
+                            <p className="text-emerald-400 text-xs font-medium">
+                                {isTyping ? '✍️ Đang trả lời...' : 'Online — Sẵn sàng tư vấn'}
+                            </p>
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}
@@ -195,6 +272,12 @@ const AIChatbox = () => {
                                 }`}
                                 style={msg.sender === 'bot' ? { background: 'rgba(255,255,255,0.06)' } : {}}
                             >
+                                {/* Show design image thumbnail if message has image */}
+                                {msg.image && (
+                                    <div className="mb-2 rounded-lg overflow-hidden border border-white/20">
+                                        <img src={msg.image} alt="Design" className="w-full max-h-[150px] object-contain bg-white/10" />
+                                    </div>
+                                )}
                                 {formatMessage(msg.text)}
                             </div>
                         </div>
@@ -222,13 +305,39 @@ const AIChatbox = () => {
                         <div className="flex flex-wrap gap-1.5">
                             {QUICK_ACTIONS.map(action => (
                                 <button
-                                    key={action.keyword}
-                                    onClick={() => handleQuickAction(action.keyword)}
-                                    className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-primary/20 text-xs text-slate-300 hover:text-primary border border-white/10 hover:border-primary/30 transition-all duration-200"
+                                    key={action.message}
+                                    onClick={() => handleQuickAction(action.message)}
+                                    disabled={isTyping}
+                                    className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-primary/20 text-xs text-slate-300 hover:text-primary border border-white/10 hover:border-primary/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {action.label}
                                 </button>
                             ))}
+                            {/* Design Review quick action */}
+                            <button
+                                onClick={handleDesignReviewClick}
+                                disabled={isTyping}
+                                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-xs text-purple-300 hover:text-purple-200 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                🖼️ AI đánh giá thiết kế
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Design image pending indicator */}
+                {designImage && (
+                    <div className="px-4 pb-2">
+                        <div className="flex items-center gap-2 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                            <img src={designImage} alt="Design" className="size-10 rounded object-contain bg-white/10" />
+                            <div className="flex-1">
+                                <p className="text-xs text-purple-300 font-medium">Thiết kế đã sẵn sàng</p>
+                                <p className="text-[10px] text-slate-500">Gõ câu hỏi hoặc gửi để AI đánh giá</p>
+                            </div>
+                            <button onClick={() => { setDesignImage(null); localStorage.removeItem('pod_design_for_review'); }}
+                                className="text-slate-500 hover:text-white">
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
                         </div>
                     </div>
                 )}
@@ -241,13 +350,14 @@ const AIChatbox = () => {
                             type="text"
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
-                            placeholder="Hỏi về size, kiểu áo, thiết kế..."
-                            className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 outline-none"
+                            placeholder={designImage ? "Hỏi gì về thiết kế này..." : "Hỏi về size, thiết kế, thử đồ..."}
+                            disabled={isTyping}
+                            className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 outline-none disabled:opacity-50"
                         />
                         <button
                             type="submit"
-                            disabled={!inputValue.trim()}
-                            className={`size-8 rounded-lg flex items-center justify-center transition-all duration-200 ${inputValue.trim()
+                            disabled={!inputValue.trim() || isTyping}
+                            className={`size-8 rounded-lg flex items-center justify-center transition-all duration-200 ${inputValue.trim() && !isTyping
                                 ? 'bg-primary text-[#11221c] hover:scale-105'
                                 : 'bg-white/5 text-slate-600'
                                 }`}
@@ -257,6 +367,17 @@ const AIChatbox = () => {
                     </div>
                 </form>
             </div>
+
+            <style>{`
+                @keyframes pulse-chat {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(56, 224, 120, 0.4); }
+                    50% { box-shadow: 0 0 0 12px rgba(56, 224, 120, 0); }
+                }
+                @keyframes typing-bounce {
+                    0%, 60%, 100% { transform: translateY(0); }
+                    30% { transform: translateY(-6px); }
+                }
+            `}</style>
         </>
     );
 };
