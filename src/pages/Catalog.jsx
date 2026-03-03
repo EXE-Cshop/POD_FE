@@ -8,10 +8,10 @@ const allProducts = [
         title: "Classic Heavyweight Tee",
         category: "T-Shirts",
         price: "$24.00",
-        image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
+        image: "https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531007/75a7660e97a621ac51a909c3fa46103f_g3whtg.webp",
         colorMockups: {
-            "Black": "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
-            "White": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop",
+            "Black": "https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531007/75a7660e97a621ac51a909c3fa46103f_g3whtg.webp",
+            "White": "https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531029/eb27d4f3c94b0c054236bc357a1d5d16_bkthgf.webp",
             "Navy": "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?q=80&w=1080&auto=format&fit=crop",
             "Red": "https://images.unsplash.com/photo-1583743814966-8936f5b721fa?q=80&w=1080&auto=format&fit=crop"
         },
