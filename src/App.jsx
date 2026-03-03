@@ -30,6 +30,9 @@ const Placeholder = ({ title }) => (
   </div>
 );
 
+import AdminDashboard from './pages/AdminDashboard';
+import SchedulerDashboard from './pages/SchedulerDashboard';
+
 function App() {
   return (
     <BrowserRouter>
@@ -59,11 +62,13 @@ function App() {
         {/* Admin routes protected by ProtectedRoute */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/admin/users" replace />} />
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<UserDirectory />} />
             <Route path="orders" element={<PrintQueue />} />
             <Route path="base-products" element={<Inventory />} />
             <Route path="print-areas" element={<PrintAreas />} />
+            <Route path="scheduler" element={<SchedulerDashboard />} />
             <Route path="roles" element={<Roles />} />
           </Route>
         </Route>
@@ -73,5 +78,6 @@ function App() {
     </BrowserRouter>
   );
 }
+
 
 export default App;
