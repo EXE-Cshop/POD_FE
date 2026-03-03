@@ -38,6 +38,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/design/:productId" element={<DesignEditor />} />
         <Route path="/design" element={<DesignEditor />} />
 
         {/* User / Home routes */}

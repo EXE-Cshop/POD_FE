@@ -1,39 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { baseProductService } from '../services/api';
+
+const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
 
 const ProductDetails = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const [selectedColor, setSelectedColor] = useState('Black');
+    const [selectedColor, setSelectedColor] = useState('White');
     const [selectedSize, setSelectedSize] = useState('M');
     const [quantity, setQuantity] = useState(1);
     const [isAdded, setIsAdded] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [product, setProduct] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    // Mock data for a single product
-    const product = {
-        id: id || 1,
-        title: "Classic Heavyweight Tee",
-        price: 24.00,
-        description: "Ultra-soft 100% ringspun cotton with a modern relaxed fit and durable stitching. Perfect for everyday wear or as a blank canvas for your custom designs.",
-        features: [
-            "Seamless double-needle 7/8\" collar",
-            "Taped neck and shoulders",
-            "Double-needle sleeve and bottom hems",
-            "Quarter-turned to eliminate center crease"
-        ],
-        images: [
-            "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU",
-            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop"
-        ],
-        colors: [
-            { name: "Black", hex: "#000000" },
-            { name: "White", hex: "#ffffff" },
-            { name: "Navy", hex: "#1e3a8a" },
-            { name: "Heather Gray", hex: "#9ca3af" }
-        ],
-        sizes: ["S", "M", "L", "XL", "2XL"]
-    };
+    // Fetch product from API
+    useEffect(() => {
+        const fetchProduct = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const response = await baseProductService.getById(id);
+                console.log('Product API Response:', response.data);
+                setProduct(response.data?.data || response.data || null);
+            } catch (err) {
+                console.error('Failed to fetch product:', err);
+                setError('Không thể tải thông tin sản phẩm.');
+            } finally {
+                setLoading(false);
+            }
+        };
+        if (id) fetchProduct();
+    }, [id]);
 
     const handleAddToCart = () => {
         setIsAdded(true);
@@ -41,6 +41,47 @@ const ProductDetails = () => {
         setTimeout(() => setIsAdded(false), 2000);
         setTimeout(() => setShowToast(false), 4000);
     };
+
+    // Default colors and sizes (can later be loaded from variants API)
+    const defaultColors = [
+        { name: "White", hex: "#ffffff" },
+        { name: "Black", hex: "#000000" },
+        { name: "Navy", hex: "#1e3a8a" },
+        { name: "Heather Gray", hex: "#9ca3af" }
+    ];
+    const defaultSizes = ["S", "M", "L", "XL", "2XL"];
+
+    const formatPrice = (price) => {
+        if (!price) return '0₫';
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+    };
+
+    if (loading) {
+        return (
+            <div className="max-w-[1440px] mx-auto px-4 md:px-10 lg:px-20 py-12 bg-background-light flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                    <p className="text-slate-500 text-sm font-medium">Loading product...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !product) {
+        return (
+            <div className="max-w-[1440px] mx-auto px-4 md:px-10 lg:px-20 py-12 bg-background-light flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <span className="material-symbols-outlined text-4xl text-red-400">error</span>
+                    <p className="text-red-500 font-medium">{error || 'Product not found'}</p>
+                    <button onClick={() => navigate('/home/catalog')} className="px-4 py-2 bg-slate-100 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors">
+                        Back to Catalog
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const productImage = product.imageUrl || DEFAULT_IMAGE;
 
     return (
         <div className="max-w-[1440px] mx-auto px-4 md:px-10 lg:px-20 py-12 bg-background-light">
@@ -50,32 +91,32 @@ const ProductDetails = () => {
                 <span className="material-symbols-outlined text-slate-400 text-xs">chevron_right</span>
                 <span className="text-slate-500 hover:text-primary cursor-pointer" onClick={() => navigate('/home/catalog')}>Catalog</span>
                 <span className="material-symbols-outlined text-slate-400 text-xs">chevron_right</span>
-                <span className="text-slate-900 font-semibold truncate">{product.title}</span>
+                <span className="text-slate-900 font-semibold truncate">{product.name}</span>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-12 lg:gap-20">
                 {/* Image Gallery */}
                 <div className="w-full lg:w-1/2 flex flex-col gap-4">
                     <div className="aspect-[4/5] md:aspect-square bg-slate-100 rounded-2xl overflow-hidden border border-slate-200">
-                        <img src={product.images[0]} alt={product.title} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="grid grid-cols-4 gap-4">
-                        {product.images.map((img, idx) => (
-                            <div key={idx} className={`aspect-square rounded-lg overflow-hidden border-2 cursor-pointer ${idx === 0 ? 'border-primary' : 'border-slate-200 hover:border-slate-300'}`}>
-                                <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
-                            </div>
-                        ))}
+                        <img
+                            src={productImage}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
+                        />
                     </div>
                 </div>
 
                 {/* Product Info & Actions */}
                 <div className="w-full lg:w-1/2 flex flex-col">
-                    <span className="text-primary font-bold text-sm tracking-widest uppercase mb-2">Premium Cotton</span>
-                    <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-4 leading-tight">{product.title}</h1>
-                    <div className="text-3xl font-black text-slate-900 mb-6">${product.price.toFixed(2)}</div>
+                    {product.material && (
+                        <span className="text-primary font-bold text-sm tracking-widest uppercase mb-2">{product.material}</span>
+                    )}
+                    <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-4 leading-tight">{product.name}</h1>
+                    <div className="text-3xl font-black text-slate-900 mb-6">{formatPrice(product.basePrice)}</div>
 
                     <p className="text-slate-600 text-lg leading-relaxed mb-8 border-b border-slate-200 pb-8">
-                        {product.description}
+                        {product.description || 'A high-quality base product perfect for custom printing and design.'}
                     </p>
 
                     {/* Color Selection */}
@@ -85,7 +126,7 @@ const ProductDetails = () => {
                             <span className="text-slate-500 text-sm">{selectedColor}</span>
                         </div>
                         <div className="flex flex-wrap gap-3">
-                            {product.colors.map(color => (
+                            {defaultColors.map(color => (
                                 <button
                                     key={color.name}
                                     onClick={() => setSelectedColor(color.name)}
@@ -104,7 +145,7 @@ const ProductDetails = () => {
                             <span className="text-primary text-sm font-semibold hover:underline cursor-pointer">Size Guide</span>
                         </div>
                         <div className="grid grid-cols-5 gap-3">
-                            {product.sizes.map(size => (
+                            {defaultSizes.map(size => (
                                 <button
                                     key={size}
                                     onClick={() => setSelectedSize(size)}
@@ -142,8 +183,8 @@ const ProductDetails = () => {
                             onClick={handleAddToCart}
                             disabled={isAdded}
                             className={`flex-1 h-14 rounded-lg font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2 ${isAdded
-                                    ? 'bg-primary text-[#11221c] shadow-[0_0_20px_rgba(20,200,100,0.3)]'
-                                    : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl'
+                                ? 'bg-primary text-[#11221c] shadow-[0_0_20px_rgba(20,200,100,0.3)]'
+                                : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl'
                                 }`}
                         >
                             <span className="material-symbols-outlined text-[20px]">
@@ -164,23 +205,37 @@ const ProductDetails = () => {
                     </div>
 
                     <button
-                        onClick={() => navigate('/design')}
+                        onClick={() => navigate(`/design/${product.id}`)}
                         className="w-full h-14 border-2 border-primary text-[#11221c] bg-primary/10 rounded-lg font-black text-lg hover:bg-primary transition-all flex items-center justify-center gap-2"
                     >
                         <span className="material-symbols-outlined text-[20px]">palette</span>
                         Customize This Product
                     </button>
 
-                    {/* Features List */}
+                    {/* Product Details */}
                     <div className="mt-12">
                         <h3 className="text-xl font-bold text-slate-900 mb-4">Product Details</h3>
                         <ul className="space-y-2">
-                            {product.features.map((feature, idx) => (
-                                <li key={idx} className="flex items-start gap-2 text-slate-600">
+                            {product.material && (
+                                <li className="flex items-start gap-2 text-slate-600">
                                     <span className="material-symbols-outlined text-primary text-[20px]">check_circle</span>
-                                    {feature}
+                                    Material: {product.material}
                                 </li>
-                            ))}
+                            )}
+                            {product.printTechnology && (
+                                <li className="flex items-start gap-2 text-slate-600">
+                                    <span className="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                                    Print Technology: {product.printTechnology}
+                                </li>
+                            )}
+                            <li className="flex items-start gap-2 text-slate-600">
+                                <span className="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                                Premium quality blank for custom designs
+                            </li>
+                            <li className="flex items-start gap-2 text-slate-600">
+                                <span className="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                                Perfect for POD (Print on Demand)
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -193,7 +248,7 @@ const ProductDetails = () => {
                     </div>
                     <div className="flex-1">
                         <h4 className="font-bold text-white text-sm">Successfully Added</h4>
-                        <p className="text-xs text-slate-400 mt-0.5">{quantity}x {product.title} ({selectedSize})</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{quantity}x {product.name} ({selectedSize})</p>
                     </div>
                     <button
                         onClick={() => navigate('/home/cart')}
