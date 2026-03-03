@@ -20,21 +20,21 @@ const Sidebar = () => {
 
             <nav className="flex-1 px-3 space-y-1">
                 {[
+                    { name: 'Dashboard', icon: 'dashboard', path: '/admin/dashboard' },
                     { name: 'User Directory', icon: 'group', path: '/admin/users' },
                     { name: 'Order Management', icon: 'shopping_cart', path: '/admin/orders' },
                     { name: 'Base Products', icon: 'inventory_2', path: '/admin/base-products' },
                     { name: 'Print Areas', icon: 'aspect_ratio', path: '/admin/print-areas' },
+                    { name: 'Scheduler', icon: 'schedule', path: '/admin/scheduler' },
                     { name: 'Roles & Permissions', icon: 'shield', path: '/admin/roles' },
                 ].map((item) => (
                     <NavLink
                         key={item.name}
                         to={item.path}
                         className={({ isActive }) => `flex items-center gap-3 px-3 py-3 rounded-lg transition-colors ${isActive
-                            ? 'text-gray-900  bg-gray-100  border-l-4 border-primary'
+                            ? 'text-gray-900  bg-gray-100  border-l-4 border-primary shadow-sm'
                             : 'text-gray-500  hover:text-gray-900  hover:bg-gray-100'
                             }`}
-                    // Add exact prop for Dashboard if path is '/' but since we redirect / to /users, it might be tricky.
-                    // Actually NavLink handles active state well.
                     >
                         <span className="material-symbols-outlined">{item.icon}</span>
                         <span className="text-sm font-medium">{item.name}</span>
