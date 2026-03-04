@@ -31,6 +31,139 @@ const AI_RESPONSES = {
     }
 };
 
+const SIZE_CHART = [
+    { size: 'S', minWeight: 40, maxWeight: 55, minHeight: 155, maxHeight: 165, chest: '86-90cm' },
+    { size: 'M', minWeight: 55, maxWeight: 65, minHeight: 160, maxHeight: 170, chest: '90-96cm' },
+    { size: 'L', minWeight: 63, maxWeight: 75, minHeight: 165, maxHeight: 175, chest: '96-102cm' },
+    { size: 'XL', minWeight: 73, maxWeight: 85, minHeight: 170, maxHeight: 180, chest: '102-108cm' },
+    { size: '2XL', minWeight: 83, maxWeight: 100, minHeight: 175, maxHeight: 190, chest: '108-114cm' },
+];
+
+function parseMeasurements(message) {
+    const lower = message.toLowerCase().replace(/,/g, '.').replace(/\s+/g, ' ');
+
+    let weight = null;
+    let height = null;
+
+    // Pattern: "65kg" or "65 kg" or "nặng 65" or "cân nặng 65"
+    const weightPatterns = [
+        /(\d{2,3})\s*kg/i,
+        /nặng\s*[:.]?\s*(\d{2,3})/i,
+        /cân\s*(?:nặng)?\s*[:.]?\s*(\d{2,3})/i,
+        /weight\s*[:.]?\s*(\d{2,3})/i,
+    ];
+
+    // Pattern: "170cm" or "170 cm" or "cao 170" or "chiều cao 170" or "1m70" or "1.70m"
+    const heightPatterns = [
+        /(\d{2,3})\s*cm/i,
+        /cao\s*[:.]?\s*(\d{2,3})/i,
+        /chiều\s*cao\s*[:.]?\s*(\d{2,3})/i,
+        /height\s*[:.]?\s*(\d{2,3})/i,
+        /(\d)[.,](\d{1,2})\s*m(?:et|ét)?/i,  // 1.70m, 1,70m
+        /(\d)\s*m\s*(\d{1,2})/i,              // 1m70
+    ];
+
+    for (const pattern of weightPatterns) {
+        const match = lower.match(pattern);
+        if (match) {
+            weight = parseInt(match[1]);
+            break;
+        }
+    }
+
+    for (const pattern of heightPatterns) {
+        const match = lower.match(pattern);
+        if (match) {
+            if (match[2] !== undefined) {
+                // Format like 1m70 or 1.70m
+                const meters = parseInt(match[1]);
+                const decimals = match[2].length === 1 ? parseInt(match[2]) * 10 : parseInt(match[2]);
+                height = meters * 100 + decimals;
+            } else {
+                height = parseInt(match[1]);
+                // If height < 100, might be in meters like "170" is fine, but "1" alone needs *100
+                if (height < 10) height = height * 100;
+            }
+            break;
+        }
+    }
+
+    // Try to find two standalone numbers if we still don't have both
+    if (weight === null || height === null) {
+        const numbers = lower.match(/\b(\d{2,3})\b/g);
+        if (numbers) {
+            const nums = numbers.map(Number);
+            for (const n of nums) {
+                if (n >= 130 && n <= 200 && height === null) {
+                    height = n;
+                } else if (n >= 30 && n <= 120 && weight === null) {
+                    weight = n;
+                }
+            }
+        }
+    }
+
+    if (weight !== null && (weight < 30 || weight > 150)) weight = null;
+    if (height !== null && (height < 130 || height > 210)) height = null;
+
+    return { weight, height };
+}
+
+function recommendSize(weight, height) {
+    let bestSize = null;
+    let bestScore = -Infinity;
+
+    for (const s of SIZE_CHART) {
+        let score = 0;
+
+        if (weight !== null) {
+            if (weight >= s.minWeight && weight <= s.maxWeight) {
+                score += 2;
+            } else {
+                const distW = Math.min(Math.abs(weight - s.minWeight), Math.abs(weight - s.maxWeight));
+                score -= distW * 0.1;
+            }
+        }
+
+        if (height !== null) {
+            if (height >= s.minHeight && height <= s.maxHeight) {
+                score += 2;
+            } else {
+                const distH = Math.min(Math.abs(height - s.minHeight), Math.abs(height - s.maxHeight));
+                score -= distH * 0.1;
+            }
+        }
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestSize = s;
+        }
+    }
+
+    return bestSize;
+}
+
+function getSizeReply(weight, height) {
+    const rec = recommendSize(weight, height);
+    if (!rec) return null;
+
+    let intro = '';
+    if (weight !== null && height !== null) {
+        intro = `Với chiều cao **${height}cm** và cân nặng **${weight}kg**`;
+    } else if (height !== null) {
+        intro = `Với chiều cao **${height}cm**`;
+    } else if (weight !== null) {
+        intro = `Với cân nặng **${weight}kg**`;
+    }
+
+    const fitNote = weight !== null && height !== null
+        ? (weight > rec.maxWeight ? '\n\n💡 *Nếu bạn thích mặc thoải mái hơn, có thể chọn lên 1 size nhé!*' :
+            weight < rec.minWeight ? '\n\n💡 *Nếu bạn thích áo ôm hơn, có thể chọn xuống 1 size nhé!*' : '')
+        : '';
+
+    return `${intro}, mình đề xuất bạn chọn size **${rec.size}** nhé! 👕\n\n📐 **Thông số size ${rec.size}:**\n• Số đo ngực: ${rec.chest}\n• Chiều cao phù hợp: ${rec.minHeight}-${rec.maxHeight}cm\n• Cân nặng phù hợp: ${rec.minWeight}-${rec.maxWeight}kg${fitNote}\n\n✅ Size **${rec.size}** sẽ vừa vặn và thoải mái nhất cho bạn!\n\nBạn có muốn biết thêm về cách phối đồ hoặc chọn kiểu áo không? 😊`;
+}
+
 const QUICK_ACTIONS = [
     { label: '📏 Tư vấn Size', keyword: 'size' },
     { label: '👕 Gợi ý Style', keyword: 'style' },
@@ -41,6 +174,15 @@ const QUICK_ACTIONS = [
 
 function getAIReply(message) {
     const lower = message.toLowerCase();
+
+    // Check for body measurements first (weight/height)
+    const { weight, height } = parseMeasurements(message);
+    if (weight !== null || height !== null) {
+        const sizeReply = getSizeReply(weight, height);
+        if (sizeReply) return sizeReply;
+    }
+
+    // Then check keyword-based responses
     for (const [, data] of Object.entries(AI_RESPONSES)) {
         for (const kw of data.keywords) {
             if (lower.includes(kw)) {
