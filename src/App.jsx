@@ -8,7 +8,7 @@ import Login from './pages/Login';
 import PrintQueue from './pages/PrintQueue';
 import Inventory from './pages/Inventory';
 import Roles from './pages/Roles';
-import DesignEditor from './pages/DesignEditor';
+import DesignerPage from './pages/DesignerPage';
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import ProductDetails from './pages/ProductDetails';
@@ -39,8 +39,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/design/:productId" element={<DesignEditor />} />
-        <Route path="/design" element={<DesignEditor />} />
+        <Route path="/design/:productId" element={<DesignerPage />} />
+        <Route path="/design" element={<DesignerPage />} />
 
         {/* User / Home routes */}
         <Route path="/home" element={<HomeLayout />}>

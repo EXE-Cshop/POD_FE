@@ -46,4 +46,9 @@ export const rolesService = {
     getRoles: () => api.get('/roles'),
 };
 
+export const renderService = {
+    /** POST /api/v1/renders/print - Render production print file from mm-based layers */
+    renderPrintFile: (body) => api.post('/renders/print', body),
+};
+
 export default api;

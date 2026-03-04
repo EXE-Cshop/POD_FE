@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="boltGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="boltShadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#2563eb" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <polygon
+    points="115,10 50,105 90,105 75,190 150,90 108,90"
+    fill="url(#boltGrad)"
+    stroke="#1d4ed8"
+    stroke-width="3"
+    stroke-linejoin="round"
+    filter="url(#boltShadow)"
+  />
+  <polygon
+    points="110,28 62,100 88,100 80,165 138,92 112,92"
+    fill="none"
+    stroke="#bfdbfe"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    opacity="0.4"
+  />
+</svg>

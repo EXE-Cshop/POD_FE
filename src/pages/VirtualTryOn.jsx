@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { baseProductService, renderService } from '../services/api';
+import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, PRINT_AREA_WIDTH_MM, PRINT_AREA_HEIGHT_MM } from '../utils/renderLayers';
 
 const API_BASE_URL = 'http://localhost:8080';
+const BASE_PRICE = 299000;
 
 const SAMPLE_PRODUCTS = [
     {
@@ -18,6 +21,10 @@ const SAMPLE_PRODUCTS = [
 
 const VirtualTryOn = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const { productId: stateProductId } = location.state || {};
+    const stored = sessionStorage.getItem('pod_tryon_product_id');
+    const returnProductId = (stateProductId ?? stored) || null;
     const personFileRef = useRef(null);
     const garmentFileRef = useRef(null);
     const personInputRef = useRef(null);
@@ -31,6 +38,8 @@ const VirtualTryOn = () => {
     const [processingStep, setProcessingStep] = useState('');
     const [aiResultImage, setAiResultImage] = useState(null);
     const [aiError, setAiError] = useState(null);
+    const [addToCartLoading, setAddToCartLoading] = useState(false);
+    const [addToCartError, setAddToCartError] = useState(null);
     const [originalPersonSize, setOriginalPersonSize] = useState({ width: 0, height: 0 });
 
     // Load design from localStorage (from DesignEditor)
@@ -262,8 +271,94 @@ const VirtualTryOn = () => {
         setGarmentSource(null);
         setAiResultImage(null);
         setAiError(null);
+        setAddToCartError(null);
         personFileRef.current = null;
         garmentFileRef.current = null;
+    };
+
+    // Thêm vào giỏ sau khi Try-On AI: gọi render API + navigate cart (chỉ khi có design từ DesignerPage)
+    const handleAddToCartFromTryOn = async () => {
+        if (garmentSource !== 'editor') {
+            navigate('/home/cart');
+            return;
+        }
+        let draft;
+        try {
+            const raw = sessionStorage.getItem('pod_designer_draft');
+            if (!raw) {
+                setAddToCartError('Không tìm thấy thiết kế. Vui lòng thiết kế từ trang Designer.');
+                return;
+            }
+            draft = JSON.parse(raw);
+        } catch {
+            setAddToCartError('Thiết kế không hợp lệ.');
+            return;
+        }
+        const frontDesign = (() => { try { return JSON.parse(draft.frontDesign || '[]'); } catch { return []; } })();
+        const backDesign = (() => { try { return JSON.parse(draft.backDesign || '[]'); } catch { return []; } })();
+        if (frontDesign.length === 0 && backDesign.length === 0) {
+            setAddToCartError('Thiết kế trống. Vui lòng thêm ít nhất một phần tử.');
+            return;
+        }
+        setAddToCartLoading(true);
+        setAddToCartError(null);
+        try {
+            let product = null;
+            const pid = draft.productId || returnProductId;
+            if (pid) {
+                try {
+                    const res = await baseProductService.getById(pid);
+                    product = res.data?.data || res.data || null;
+                } catch (_) {}
+            }
+            const getGarmentUrl = () => {
+                if (!product) return null;
+                const img = product.imageUrl || product.image_url;
+                if (img) return img;
+                const vs = product.variants || [];
+                const v = vs[0];
+                return v?.frontImageUrl || v?.front_image_url || img;
+            };
+            const garmentBaseUrl = getGarmentUrl();
+            const garmentUrl = garmentBaseUrl ? await ensureDataUrl(garmentBaseUrl) : null;
+            const printAreaRatios = { print_area_left_ratio: 0.25, print_area_top_ratio: 0.125, print_area_width_ratio: 0.5, print_area_height_ratio: 0.75 };
+
+            let frontPrintUrl = null;
+            let backPrintUrl = null;
+            if (frontDesign.length > 0) {
+                const layersRaw = serializedToRenderLayers(frontDesign);
+                const layers = await ensureDataUrlsForLayers(layersRaw);
+                const res = await renderService.renderPrintFile({ width_mm: PRINT_AREA_WIDTH_MM, height_mm: PRINT_AREA_HEIGHT_MM, layers, dpi: 300, garment_image_url: garmentUrl || undefined, ...printAreaRatios });
+                frontPrintUrl = res.data?.data?.file_url || res.data?.file_url;
+            }
+            if (backDesign.length > 0) {
+                const layersRaw = serializedToRenderLayers(backDesign);
+                const layers = await ensureDataUrlsForLayers(layersRaw);
+                const res = await renderService.renderPrintFile({ width_mm: PRINT_AREA_WIDTH_MM, height_mm: PRINT_AREA_HEIGHT_MM, layers, dpi: 300, garment_image_url: garmentUrl || undefined, ...printAreaRatios });
+                backPrintUrl = res.data?.data?.file_url || res.data?.file_url;
+            }
+            const basePrice = product?.basePrice != null ? Number(product.basePrice) : BASE_PRICE;
+            const cartItem = {
+                id: Date.now(),
+                productId: Number(pid) || 0,
+                title: product?.name ? `${product.name} - Custom Design` : 'Custom Tee - Try-On',
+                color: draft.activeColor === 'black' ? 'Black' : 'White',
+                size: draft.selectedSize || 'M',
+                quantity: draft.quantity ?? 1,
+                price: basePrice / 25000,
+                image: garmentImage,
+                isCustomDesign: true,
+                frontPrintUrl: frontPrintUrl || undefined,
+                backPrintUrl: backPrintUrl || undefined,
+                designPayload: { frontDesign, backDesign, garmentColor: draft.activeColor || 'white' },
+            };
+            navigate('/home/cart', { state: { newDesignItem: cartItem } });
+        } catch (err) {
+            console.error('Add to cart from Try-On failed', err);
+            setAddToCartError(err.response?.data?.message || err.message || 'Không thể thêm vào giỏ.');
+        } finally {
+            setAddToCartLoading(false);
+        }
     };
 
     const stepMessages = {
@@ -334,6 +429,9 @@ const VirtualTryOn = () => {
                                     Kết quả AI Virtual Try-On
                                 </h3>
                                 <div className="flex items-center gap-2">
+                                    {addToCartError && (
+                                        <p className="text-xs text-red-500 font-medium max-w-[200px] truncate" title={addToCartError}>{addToCartError}</p>
+                                    )}
                                     <button
                                         onClick={handleDownload}
                                         className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold transition-colors"
@@ -342,11 +440,16 @@ const VirtualTryOn = () => {
                                         Tải ảnh
                                     </button>
                                     <button
-                                        onClick={() => navigate('/home/cart')}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-primary text-[#11221c] rounded-lg text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20"
+                                        onClick={handleAddToCartFromTryOn}
+                                        disabled={addToCartLoading}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-primary text-[#11221c] rounded-lg text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
-                                        <span className="material-symbols-outlined text-[16px]">shopping_cart</span>
-                                        Thêm vào giỏ
+                                        {addToCartLoading ? (
+                                            <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                        ) : (
+                                            <span className="material-symbols-outlined text-[16px]">shopping_cart</span>
+                                        )}
+                                        {addToCartLoading ? 'Đang xử lý...' : 'Thêm vào giỏ'}
                                     </button>
                                 </div>
                             </div>
@@ -529,6 +632,13 @@ const VirtualTryOn = () => {
                                                 <p className="text-xs text-primary font-medium">Từ Design Editor ✓</p>
                                             </div>
                                         </div>
+                                        <button
+                                                onClick={() => navigate(returnProductId ? `/design/${returnProductId}` : '/design')}
+                                                className="mt-3 w-full py-2 px-3 bg-primary/20 hover:bg-primary/30 border border-primary/40 rounded-lg text-sm font-bold text-[#11221c] transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                                                Quay lại thiết kế
+                                            </button>
                                     </div>
                                 )}
 
