@@ -1,15 +1,37 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const OrderSuccess = () => {
     const navigate = useNavigate();
+    const [order, setOrder] = useState(null);
 
-    // Simulate scrolling to top on load
     useEffect(() => {
         window.scrollTo(0, 0);
+        const savedOrder = localStorage.getItem('lastOrder');
+        if (savedOrder) {
+            try {
+                setOrder(JSON.parse(savedOrder));
+            } catch { /* ignore parse errors */ }
+            localStorage.removeItem('lastOrder');
+        }
     }, []);
 
-    const orderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const orderNumber = order?.id ? `ORD-${String(order.id).padStart(4, '0')}` : `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return 'N/A';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    const getEstimatedDelivery = () => {
+        const start = new Date();
+        start.setDate(start.getDate() + 5);
+        const end = new Date();
+        end.setDate(end.getDate() + 8);
+        const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${fmt(start)} - ${fmt(end)}, ${end.getFullYear()}`;
+    };
 
     return (
         <div className="flex-1 w-full min-h-[80vh] flex flex-col items-center justify-center p-6 md:p-12 text-center bg-background-light">
@@ -40,12 +62,32 @@ const OrderSuccess = () => {
                         </div>
                         <div>
                             <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Estimated Delivery</span>
-                            <span className="text-lg font-bold text-slate-700">Feb 28 - Mar 3, 2026</span>
+                            <span className="text-lg font-bold text-slate-700">{getEstimatedDelivery()}</span>
                         </div>
-                        <div className="md:col-span-2">
-                            <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Confirmation Sent To</span>
-                            <span className="text-lg font-bold text-slate-700">you@example.com</span>
-                        </div>
+                        {order?.totalAmount && (
+                            <div>
+                                <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Total Amount</span>
+                                <span className="text-lg font-black text-primary">${Number(order.totalAmount).toFixed(2)}</span>
+                            </div>
+                        )}
+                        {order?.paymentMethod && (
+                            <div>
+                                <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Payment Method</span>
+                                <span className="text-lg font-bold text-slate-700">{order.paymentMethod}</span>
+                            </div>
+                        )}
+                        {order?.shippingAddress && (
+                            <div className="md:col-span-2">
+                                <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Shipping Address</span>
+                                <span className="text-lg font-bold text-slate-700">{order.shippingAddress}</span>
+                            </div>
+                        )}
+                        {order?.status && (
+                            <div>
+                                <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Status</span>
+                                <span className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-sm font-bold rounded-full">{order.status}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -74,16 +116,16 @@ const OrderSuccess = () => {
 
                 <div className="flex flex-col sm:flex-row gap-4 w-full">
                     <button
-                        onClick={() => navigate('/home/catalog')}
+                        onClick={() => navigate('/home/my-orders')}
                         className="flex-1 h-16 bg-slate-900 text-white rounded-lg font-black text-lg hover:bg-slate-800 transition-all shadow-lg hover:-translate-y-1 transform"
                     >
-                        Continue Shopping
+                        View My Orders
                     </button>
                     <button
-                        onClick={() => navigate('/home')}
+                        onClick={() => navigate('/home/catalog')}
                         className="flex-1 h-16 bg-white text-slate-900 rounded-lg font-bold text-lg border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all"
                     >
-                        Return to Home
+                        Continue Shopping
                     </button>
                 </div>
 

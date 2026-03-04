@@ -1,60 +1,118 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+const API_BASE_URL = 'http://localhost:8080';
+
 const Cart = () => {
     const navigate = useNavigate();
-    const location = useLocation();
+    const [cartItems, setCartItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [updatingItems, setUpdatingItems] = useState({});
 
-    // Mock cart data
-    const [cartItems, setCartItems] = useState([
-        {
-            id: 1,
-            productId: 1,
-            title: "Classic Heavyweight Tee",
-            color: "Black",
-            size: "L",
-            price: 24.00,
-            quantity: 2,
-            image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCOrGJnglhAjDuPNkJgnc4cGiA7RrI4knQya_aIqD5e4WSGqJ1jbXHuYAWDENee3Q6e8dJNFWCnVe9P9qdf13Pk0eGCfZxTtI8A8AncgT6cZDWcJ_5XYh8YsGpJWibXvz9nvcaBY_TDw-CmTQtASLq5y0LgTyOEVzEfA3sMWXg-BnShdI-ZHnF7FAjsH8e9qRgpXcIZq91rM_T0PnuADqQPXjeB94zdgEwoM49q4weNZQ_85yT8rFCcPHtBD-HJxAUQsPXuJsa5KhU"
-        },
-        {
-            id: 2,
-            productId: 3,
-            title: "Ceramic Coffee Mug (11oz)",
-            color: "White",
-            size: "One Size",
-            price: 12.00,
-            quantity: 1,
-            image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBcWFjI8XBegFLDDWDZmE_USMLx2E278vt7nuRFKQwDt6mDO_INQVvwxHjFlac8n_VpvMAD4X7iZbMlVBoZLEVqbM77yqesWevjAqElTJiwZQHBCaE4jDz3wMYt6NitdZSmp608ooYkJURN7g74yPAcVI9KDfIt2hKN2dV2DCcQ_X-55PyveyOSQXNvgtlPCzwWrLIORxEr1YVCYF_YGz4dG6MSdw_EyI2GCvDTu137wLiN367HCLGLHv9xTyBODrOR-8711xgY-4s"
-        }
-    ]);
-
-    useEffect(() => {
-        const newItem = location.state?.newDesignItem;
-        if (newItem) {
-            setCartItems((prev) => [newItem, ...prev]);
-            navigate(location.pathname, { replace: true, state: {} });
-        }
-    }, [location.state, location.pathname, navigate]);
-
-    const updateQuantity = (id, delta) => {
-        setCartItems(items => items.map(item => {
-            if (item.id === id) {
-                const newQuantity = Math.max(1, item.quantity + delta);
-                return { ...item, quantity: newQuantity };
-            }
-            return item;
-        }));
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('accessToken');
+        return {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+        };
     };
 
-    const removeItem = (id) => {
-        setCartItems(items => items.filter(item => item.id !== id));
+    const fetchCart = async () => {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+            navigate('/home/login');
+            return;
+        }
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/cart`, {
+                headers: getAuthHeaders(),
+            });
+            if (response.status === 401 || response.status === 403) {
+                navigate('/home/login');
+                return;
+            }
+            if (!response.ok) throw new Error('Failed to fetch cart');
+            const result = await response.json();
+            setCartItems(result.data?.items || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCart();
+    }, []);
+
+    const updateQuantity = async (itemId, newQuantity) => {
+        if (newQuantity < 1) return;
+        setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/cart/items/${itemId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ quantity: newQuantity }),
+            });
+            if (!response.ok) throw new Error('Failed to update item');
+            const result = await response.json();
+            setCartItems(result.data?.items || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
+        }
+    };
+
+    const removeItem = async (itemId) => {
+        setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/cart/items/${itemId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders(),
+            });
+            if (!response.ok) throw new Error('Failed to remove item');
+            const result = await response.json();
+            setCartItems(result.data?.items || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
+        }
     };
 
     const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.08; // 8% tax
+    const tax = subtotal * 0.08;
     const shipping = subtotal > 50 ? 0 : 5.99;
     const total = subtotal + tax + shipping;
+
+    if (loading) {
+        return (
+            <div className="flex-1 w-full max-w-[1440px] mx-auto px-4 md:px-10 lg:px-20 py-20 flex flex-col items-center justify-center bg-background-light">
+                <span className="material-symbols-outlined text-[48px] text-slate-300 animate-spin">progress_activity</span>
+                <p className="text-slate-500 mt-4 font-bold">Loading your cart...</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex-1 w-full max-w-[1440px] mx-auto px-4 md:px-10 lg:px-20 py-20 flex flex-col items-center justify-center text-center bg-background-light">
+                <div className="size-24 bg-red-50 rounded-full flex items-center justify-center mb-6">
+                    <span className="material-symbols-outlined text-[48px] text-red-300">error</span>
+                </div>
+                <h2 className="text-3xl font-black text-slate-900 mb-4">Something went wrong</h2>
+                <p className="text-slate-500 mb-8 max-w-md">{error}</p>
+                <button
+                    onClick={() => { setError(null); setLoading(true); fetchCart(); }}
+                    className="h-12 px-8 bg-primary text-[#11221c] font-extrabold rounded-lg hover:bg-primary/90 transition-all shadow-md"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
 
     if (cartItems.length === 0) {
         return (
@@ -91,20 +149,17 @@ const Cart = () => {
 
                     {/* Items */}
                     {cartItems.map(item => (
-                        <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center py-6 border-b border-slate-200">
+                        <div key={item.id} className={`grid grid-cols-1 md:grid-cols-12 gap-4 items-center py-6 border-b border-slate-200 ${updatingItems[item.id] ? 'opacity-50 pointer-events-none' : ''}`}>
                             {/* Product Info */}
                             <div className="col-span-1 md:col-span-6 flex gap-6 items-start">
-                                <div className="w-24 h-32 md:w-32 md:h-40 bg-slate-100 rounded-xl overflow-hidden shrink-0 cursor-pointer" onClick={() => navigate(`/home/product/${item.productId}`)}>
-                                    <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                                <div className="w-24 h-32 md:w-32 md:h-40 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-[40px] text-slate-300">checkroom</span>
                                 </div>
                                 <div className="flex flex-col">
-                                    <h3
-                                        className="text-lg font-bold text-slate-900 mb-1 cursor-pointer hover:text-primary transition-colors hover:underline"
-                                        onClick={() => navigate(`/home/product/${item.productId}`)}
-                                    >
-                                        {item.title}
+                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
+                                        {item.productName}
                                     </h3>
-                                    <p className="text-sm text-slate-500 mb-4">Color: <span className="text-slate-900 font-medium">{item.color}</span> | Size: <span className="text-slate-900 font-medium">{item.size}</span></p>
+                                    <p className="text-sm text-slate-500 mb-4">Color: <span className="text-slate-900 font-medium">{item.colorName}</span> | Size: <span className="text-slate-900 font-medium">{item.size}</span></p>
 
                                     <div className="mt-auto hidden md:block">
                                         <button
@@ -120,23 +175,23 @@ const Cart = () => {
 
                             {/* Mobile Info Wrapper */}
                             <div className="col-span-1 md:hidden flex items-center justify-between mt-4">
-                                <span className="font-bold text-lg">${item.price.toFixed(2)}</span>
+                                <span className="font-bold text-lg">${Number(item.price).toFixed(2)}</span>
                                 <div className="flex items-center border border-slate-200 rounded-lg bg-white h-10 w-28">
-                                    <button onClick={() => updateQuantity(item.id, -1)} className="w-8 flex justify-center text-slate-500"><span className="material-symbols-outlined text-[18px]">remove</span></button>
+                                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 flex justify-center text-slate-500"><span className="material-symbols-outlined text-[18px]">remove</span></button>
                                     <span className="flex-1 text-center font-bold">{item.quantity}</span>
-                                    <button onClick={() => updateQuantity(item.id, 1)} className="w-8 flex justify-center text-slate-500"><span className="material-symbols-outlined text-[18px]">add</span></button>
+                                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 flex justify-center text-slate-500"><span className="material-symbols-outlined text-[18px]">add</span></button>
                                 </div>
                                 <button onClick={() => removeItem(item.id)} className="text-slate-400 hover:text-red-500"><span className="material-symbols-outlined">delete</span></button>
                             </div>
 
                             {/* Desktop Columns */}
                             <div className="hidden md:flex col-span-2 justify-center font-bold text-lg text-slate-900">
-                                ${item.price.toFixed(2)}
+                                ${Number(item.price).toFixed(2)}
                             </div>
                             <div className="hidden md:flex col-span-2 justify-center">
                                 <div className="flex items-center border border-slate-200 rounded-lg bg-white h-12 w-32 shadow-sm">
                                     <button
-                                        onClick={() => updateQuantity(item.id, -1)}
+                                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
                                         className="w-10 h-full flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors"
                                     >
                                         <span className="material-symbols-outlined text-[20px]">remove</span>
@@ -148,7 +203,7 @@ const Cart = () => {
                                         className="w-12 h-full text-center font-bold text-slate-900 outline-none"
                                     />
                                     <button
-                                        onClick={() => updateQuantity(item.id, 1)}
+                                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
                                         className="w-10 h-full flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors"
                                     >
                                         <span className="material-symbols-outlined text-[20px]">add</span>
@@ -156,7 +211,7 @@ const Cart = () => {
                                 </div>
                             </div>
                             <div className="hidden md:flex col-span-2 justify-end font-black text-xl text-primary">
-                                ${(item.price * item.quantity).toFixed(2)}
+                                ${Number(item.subtotal).toFixed(2)}
                             </div>
                         </div>
                     ))}
