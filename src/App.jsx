@@ -22,6 +22,7 @@ import UserLogin from './pages/UserLogin';
 import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
 import VirtualTryOn from './pages/VirtualTryOn';
+import Upload from './pages/Upload';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -52,6 +53,7 @@ function App() {
           <Route path="my-orders" element={<OrderHistory />} />
           <Route path="profile" element={<UserProfile />} />
           <Route path="virtual-try-on" element={<VirtualTryOn />} />
+          <Route path="upload" element={<Upload />} />
         </Route>
 
         {/* Customer Auth Routes */}
