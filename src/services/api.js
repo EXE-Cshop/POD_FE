@@ -38,6 +38,10 @@ export const baseProductService = {
     delete: (id) => api.delete(`/base-products/${id}`),
 };
 
+export const productVariantService = {
+    getByBaseProductId: (baseProductId) => api.get('/product-variants', { params: { baseProductId, page: 1, pageSize: 50, active: true } }),
+};
+
 export const rolesService = {
     getRoles: () => api.get('/roles'),
 };

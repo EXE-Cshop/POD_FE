@@ -31,6 +31,7 @@ const VirtualTryOn = () => {
     const [processingStep, setProcessingStep] = useState('');
     const [aiResultImage, setAiResultImage] = useState(null);
     const [aiError, setAiError] = useState(null);
+    const [originalPersonSize, setOriginalPersonSize] = useState({ width: 0, height: 0 });
 
     // Load design from localStorage (from DesignEditor)
     useEffect(() => {
@@ -48,8 +49,15 @@ const VirtualTryOn = () => {
         personFileRef.current = file;
         const reader = new FileReader();
         reader.onload = (ev) => {
-            setPersonPhoto(ev.target.result);
+            const dataUrl = ev.target.result;
+            setPersonPhoto(dataUrl);
             resetResult();
+            // Đọc kích thước ảnh gốc
+            const img = new Image();
+            img.onload = () => {
+                setOriginalPersonSize({ width: img.naturalWidth, height: img.naturalHeight });
+            };
+            img.src = dataUrl;
         };
         reader.readAsDataURL(file);
     };
@@ -84,8 +92,15 @@ const VirtualTryOn = () => {
             personFileRef.current = file;
             const reader = new FileReader();
             reader.onload = (ev) => {
-                setPersonPhoto(ev.target.result);
+                const dataUrl = ev.target.result;
+                setPersonPhoto(dataUrl);
                 resetResult();
+                // Đọc kích thước ảnh gốc
+                const img = new Image();
+                img.onload = () => {
+                    setOriginalPersonSize({ width: img.naturalWidth, height: img.naturalHeight });
+                };
+                img.src = dataUrl;
             };
             reader.readAsDataURL(file);
         }
@@ -114,6 +129,24 @@ const VirtualTryOn = () => {
     const resetResult = () => {
         setAiResultImage(null);
         setAiError(null);
+    };
+
+    // Resize ảnh kết quả về kích thước ảnh gốc của khách hàng
+    const resizeImageToMatch = (blobUrl, targetWidth, targetHeight) => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                canvas.toBlob((blob) => {
+                    resolve(URL.createObjectURL(blob));
+                }, 'image/png');
+            };
+            img.src = blobUrl;
+        });
     };
 
     // Helper: Convert data URL to Blob
@@ -195,7 +228,13 @@ const VirtualTryOn = () => {
             }
 
             const blob = await response.blob();
-            const resultUrl = URL.createObjectURL(blob);
+            let resultUrl = URL.createObjectURL(blob);
+
+            // Resize ảnh kết quả về kích thước ảnh gốc của khách hàng
+            if (originalPersonSize.width > 0 && originalPersonSize.height > 0) {
+                resultUrl = await resizeImageToMatch(resultUrl, originalPersonSize.width, originalPersonSize.height);
+            }
+
             setAiResultImage(resultUrl);
 
         } catch (err) {
@@ -252,8 +291,7 @@ const VirtualTryOn = () => {
                         Phòng Thử Đồ <span className="text-primary">Ảo AI</span>
                     </h1>
                     <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-                        Upload ảnh của bạn và ảnh quần áo — AI sẽ tạo ảnh mới với bạn đang mặc trang phục đó.
-                        Powered by <span className="text-primary font-semibold">Google Gemini</span>.
+                        Thử đồ tại nhà — không cần đến cửa hàng. Tiết kiệm thời gian, chọn đúng sản phẩm yêu thích trước khi đặt mua.
                     </p>
                 </div>
             </div>
@@ -402,6 +440,34 @@ const VirtualTryOn = () => {
                                         onChange={handlePersonUpload}
                                         className="hidden"
                                     />
+                                </div>
+
+                                {/* Tips for best results */}
+                                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="material-symbols-outlined text-amber-500 text-[20px] mt-0.5 flex-shrink-0">tips_and_updates</span>
+                                        <div>
+                                            <p className="text-sm font-bold text-amber-800 mb-2">Mẹo để có kết quả đẹp nhất</p>
+                                            <ul className="text-xs text-amber-700 space-y-1.5 list-none">
+                                                <li className="flex items-start gap-1.5">
+                                                    <span className="text-amber-500 mt-0.5">✓</span>
+                                                    <span>Dùng ảnh <strong>toàn thân hoặc nửa thân trên</strong>, đứng thẳng, mặt hướng về phía trước</span>
+                                                </li>
+                                                <li className="flex items-start gap-1.5">
+                                                    <span className="text-amber-500 mt-0.5">✓</span>
+                                                    <span>Nền ảnh <strong>đơn giản, sáng màu</strong> (tường trắng, nền trơn)</span>
+                                                </li>
+                                                <li className="flex items-start gap-1.5">
+                                                    <span className="text-amber-500 mt-0.5">✓</span>
+                                                    <span>Ánh sáng <strong>đều, rõ ràng</strong> — tránh ảnh tối hoặc ngược sáng</span>
+                                                </li>
+                                                <li className="flex items-start gap-1.5">
+                                                    <span className="text-amber-500 mt-0.5">✗</span>
+                                                    <span>Tránh ảnh <strong>bị cắt xén</strong>, tay khoanh, hoặc đang ngồi</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
