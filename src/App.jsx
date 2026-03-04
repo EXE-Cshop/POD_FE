@@ -8,7 +8,7 @@ import Login from './pages/Login';
 import PrintQueue from './pages/PrintQueue';
 import Inventory from './pages/Inventory';
 import Roles from './pages/Roles';
-import DesignEditor from './pages/DesignEditor';
+import DesignerPage from './pages/DesignerPage';
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import ProductDetails from './pages/ProductDetails';
@@ -21,6 +21,7 @@ import AuthLayout from './components/AuthLayout';
 import UserLogin from './pages/UserLogin';
 import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
+import DesignEditor from './pages/DesignEditor';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -34,7 +35,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/design" element={<DesignEditor />} />
+        <Route path="/design" element={<DesignerPage />} />
+        <Route path="/design-editor" element={<DesignEditor />} />
 
         {/* User / Home routes */}
         <Route path="/home" element={<HomeLayout />}>
