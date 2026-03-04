@@ -21,7 +21,7 @@ import AuthLayout from './components/AuthLayout';
 import UserLogin from './pages/UserLogin';
 import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
-import DesignEditor from './pages/DesignEditor';
+import VirtualTryOn from './pages/VirtualTryOn';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -30,13 +30,16 @@ const Placeholder = ({ title }) => (
   </div>
 );
 
+import AdminDashboard from './pages/AdminDashboard';
+import SchedulerDashboard from './pages/SchedulerDashboard';
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/design/:productId" element={<DesignerPage />} />
         <Route path="/design" element={<DesignerPage />} />
-        <Route path="/design-editor" element={<DesignEditor />} />
 
         {/* User / Home routes */}
         <Route path="/home" element={<HomeLayout />}>
@@ -48,6 +51,7 @@ function App() {
           <Route path="order-success" element={<OrderSuccess />} />
           <Route path="my-orders" element={<OrderHistory />} />
           <Route path="profile" element={<UserProfile />} />
+          <Route path="virtual-try-on" element={<VirtualTryOn />} />
         </Route>
 
         {/* Customer Auth Routes */}
@@ -59,11 +63,13 @@ function App() {
         {/* Admin routes protected by ProtectedRoute */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/admin/users" replace />} />
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<UserDirectory />} />
             <Route path="orders" element={<PrintQueue />} />
             <Route path="base-products" element={<Inventory />} />
             <Route path="print-areas" element={<PrintAreas />} />
+            <Route path="scheduler" element={<SchedulerDashboard />} />
             <Route path="roles" element={<Roles />} />
           </Route>
         </Route>
@@ -73,5 +79,6 @@ function App() {
     </BrowserRouter>
   );
 }
+
 
 export default App;

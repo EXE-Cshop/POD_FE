@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import * as fabric from 'fabric';
+import { baseProductService, renderService } from '../services/api';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
@@ -13,6 +14,10 @@ const PRINT_AREA_HEIGHT = 600;
 
 const PRINT_AREA_LEFT = (CANVAS_WIDTH - PRINT_AREA_WIDTH) / 2;
 const PRINT_AREA_TOP = (CANVAS_HEIGHT - PRINT_AREA_HEIGHT) / 2;
+/** Print area in mm (for backend RenderController). 400x600 px ≈ 100x150 mm at ~67 DPI. */
+const PRINT_AREA_WIDTH_MM = 100;
+const PRINT_AREA_HEIGHT_MM = 150;
+const PX_TO_MM = PRINT_AREA_WIDTH_MM / PRINT_AREA_WIDTH;
 const PRINT_AREA_RIGHT = PRINT_AREA_LEFT + PRINT_AREA_WIDTH;
 const PRINT_AREA_BOTTOM = PRINT_AREA_TOP + PRINT_AREA_HEIGHT;
 
@@ -45,9 +50,14 @@ const applyPrintAreaClip = (obj) => {
 
 const DesignerPage = () => {
   const navigate = useNavigate();
+  const { productId } = useParams();
   const canvasRef = useRef(null);
   const fabricRef = useRef(null);
 
+  const [product, setProduct] = useState(null);
+  const [productLoading, setProductLoading] = useState(!!productId);
+  const [productError, setProductError] = useState(null);
+  const [renderError, setRenderError] = useState(null);
   const [activeTool, setActiveTool] = useState('stickers');
   const [textValue, setTextValue] = useState('');
   const [newFontFamily, setNewFontFamily] = useState('Manrope, sans-serif');
@@ -81,6 +91,29 @@ const DesignerPage = () => {
   const frontRedoStackRef = useRef([]);
   const backUndoStackRef = useRef([]);
   const backRedoStackRef = useRef([]);
+
+  // Fetch product when productId is present (from /design/:productId)
+  useEffect(() => {
+    if (!productId) {
+      setProductLoading(false);
+      setProduct(null);
+      return;
+    }
+    const fetchProduct = async () => {
+      setProductLoading(true);
+      setProductError(null);
+      try {
+        const res = await baseProductService.getById(productId);
+        setProduct(res.data?.data || res.data || null);
+      } catch (err) {
+        console.error('DesignerPage: fetch product failed', err);
+        setProductError('Không thể tải thông tin sản phẩm.');
+      } finally {
+        setProductLoading(false);
+      }
+    };
+    fetchProduct();
+  }, [productId]);
 
   const refreshLayers = useCallback((canvas) => {
     if (!canvas) return;
@@ -601,36 +634,161 @@ const DesignerPage = () => {
         return { ...base, text: obj.text, fontSize: obj.fontSize, fontFamily: obj.fontFamily, fontWeight: obj.fontWeight || 'normal', fontStyle: obj.fontStyle || 'normal', fill: obj.fill, textAlign: obj.textAlign, width: Math.round(obj.width) };
       }
       if (obj.type === 'image' && obj.getSrc) {
-        return { ...base, src: obj.getSrc() };
+        const w = obj.getScaledWidth?.() ?? obj.width * (obj.scaleX ?? 1);
+        const h = obj.getScaledHeight?.() ?? obj.height * (obj.scaleY ?? 1);
+        return { ...base, src: obj.getSrc(), width: Math.round(w), height: Math.round(h) };
       }
       return base;
     });
   };
 
-  const addToCart = () => {
+  /** Convert serialized design objects to RenderPrintRequest layers (mm-based) */
+  const serializedToRenderLayers = (objs) => {
+    return objs.map((obj, idx) => {
+      const left = obj.left ?? 0;
+      const top = obj.top ?? 0;
+      const w = obj.width ?? (obj.type === 'textbox' ? 100 : 0);
+      const h = obj.height ?? (obj.type === 'textbox' ? (obj.fontSize || 24) * 1.5 : 0);
+      const xMm = Math.max(0, (left - PRINT_AREA_LEFT) * PX_TO_MM);
+      const yMm = Math.max(0, (top - PRINT_AREA_TOP) * PX_TO_MM);
+      const widthMm = Math.max(0.1, w * PX_TO_MM);
+      const heightMm = Math.max(0.1, h * PX_TO_MM);
+      const base = {
+        type: obj.type === 'textbox' ? 'text' : 'image',
+        x_mm: xMm,
+        y_mm: yMm,
+        width_mm: widthMm,
+        height_mm: heightMm,
+        rotation_deg: obj.angle ?? 0,
+        z_index: idx,
+        opacity: obj.opacity ?? 1,
+      };
+      if (obj.type === 'textbox') {
+        return { ...base, text: obj.text || '', fontFamily: obj.fontFamily || 'Arial', fontSize: obj.fontSize || 24, fontColor: obj.fill || '#000000' };
+      }
+      let url = obj.src || '';
+      if (url && !url.startsWith('http')) {
+        url = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+      }
+      return { ...base, url };
+    });
+  };
+
+  /** Convert fabric design objects to RenderPrintRequest layers (mm-based) for backend */
+  const designObjectsToRenderLayers = (fabricObjs) => {
+    return fabricObjs.map((obj, idx) => {
+      const left = obj.left ?? 0;
+      const top = obj.top ?? 0;
+      const w = obj.getScaledWidth?.() ?? (obj.width * (obj.scaleX ?? 1));
+      const h = obj.getScaledHeight?.() ?? (obj.height * (obj.scaleY ?? 1));
+      const xMm = Math.max(0, (left - PRINT_AREA_LEFT) * PX_TO_MM);
+      const yMm = Math.max(0, (top - PRINT_AREA_TOP) * PX_TO_MM);
+      const widthMm = Math.max(0.1, w * PX_TO_MM);
+      const heightMm = Math.max(0.1, h * PX_TO_MM);
+      const base = {
+        type: obj.type === 'textbox' ? 'text' : 'image',
+        x_mm: xMm,
+        y_mm: yMm,
+        width_mm: widthMm,
+        height_mm: heightMm,
+        rotation_deg: obj.angle ?? 0,
+        z_index: idx,
+        opacity: obj.opacity ?? 1,
+      };
+      if (obj.type === 'textbox') {
+        return {
+          ...base,
+          text: obj.text || '',
+          fontFamily: obj.fontFamily || 'Arial',
+          fontSize: obj.fontSize || 24,
+          fontColor: obj.fill || '#000000',
+        };
+      }
+      let url = obj.getSrc?.() || obj.src || '';
+      if (url && !url.startsWith('http')) {
+        url = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+      }
+      return { ...base, url };
+    });
+  };
+
+  const addToCart = async () => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const frontObjs = designSide === 'front' ? serializeDesignObjects(canvas) : JSON.parse(frontDesignRef.current || '[]');
-    const backObjs = designSide === 'back' ? serializeDesignObjects(canvas) : JSON.parse(backDesignRef.current || '[]');
-    const pricePerUnit = BASE_PRICE / 25000;
+
+    const currentSideObjs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+    const frontStored = JSON.parse(frontDesignRef.current || '[]');
+    const backStored = JSON.parse(backDesignRef.current || '[]');
+    const frontSerialized = designSide === 'front' ? serializeDesignObjects(canvas) : frontStored;
+    const backSerialized = designSide === 'back' ? serializeDesignObjects(canvas) : backStored;
+
+    const hasDesign = currentSideObjs.length > 0 || frontStored.length > 0 || backStored.length > 0;
+    if (!hasDesign) {
+      setRenderError('Vui lòng thêm ít nhất một phần tử vào thiết kế.');
+      return;
+    }
+    setRenderError(null);
+
+    let frontPrintUrl = null;
+    let backPrintUrl = null;
+
+    try {
+      if (frontSerialized.length > 0) {
+        const layers = designSide === 'front'
+          ? designObjectsToRenderLayers(currentSideObjs)
+          : serializedToRenderLayers(frontSerialized);
+        const res = await renderService.renderPrintFile({
+          width_mm: PRINT_AREA_WIDTH_MM,
+          height_mm: PRINT_AREA_HEIGHT_MM,
+          layers,
+          dpi: 300,
+        });
+        frontPrintUrl = res.data?.data?.file_url || res.data?.file_url;
+      }
+      if (backSerialized.length > 0) {
+        const layers = designSide === 'back'
+          ? designObjectsToRenderLayers(currentSideObjs)
+          : serializedToRenderLayers(backSerialized);
+        const res = await renderService.renderPrintFile({
+          width_mm: PRINT_AREA_WIDTH_MM,
+          height_mm: PRINT_AREA_HEIGHT_MM,
+          layers,
+          dpi: 300,
+        });
+        backPrintUrl = res.data?.data?.file_url || res.data?.file_url;
+      }
+    } catch (err) {
+      console.error('Render failed', err);
+      setRenderError(err.response?.data?.message || err.message || 'Không thể render file in.');
+      return;
+    }
+
+    const basePrice = product?.basePrice != null ? Number(product.basePrice) : BASE_PRICE;
+    const pricePerUnit = basePrice / 25000;
+    const productTitle = product?.name ? `${product.name} - Custom Design` : 'Classic Tee - Custom Design';
+    const pid = product?.id ?? productId ?? 170;
+
     const cartItem = {
       id: Date.now(),
-      productId: 170,
-      title: 'Classic Tee - Custom Design',
+      productId: Number(pid),
+      title: productTitle,
       color: activeColor === 'white' ? 'White' : 'Black',
       size: selectedSize,
       quantity,
       price: pricePerUnit,
       image: TSHIRT_IMAGES[activeColor],
       isCustomDesign: true,
+      frontPrintUrl: frontPrintUrl || undefined,
+      backPrintUrl: backPrintUrl || undefined,
       designPayload: {
-        frontDesign: frontObjs,
-        backDesign: backObjs,
+        frontDesign: frontSerialized,
+        backDesign: backSerialized,
         canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
         printArea: { left: PRINT_AREA_LEFT, top: PRINT_AREA_TOP, width: PRINT_AREA_WIDTH, height: PRINT_AREA_HEIGHT },
         garmentColor: activeColor,
       },
     };
+
     navigate('/home/cart', { state: { newDesignItem: cartItem } });
     setIsAdded(true);
     setShowToast(true);
@@ -695,6 +853,27 @@ const DesignerPage = () => {
 
   // ─── Render ───────────────────────────────────────────────────────
 
+  if (productLoading) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center bg-background-light">
+        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="mt-4 text-slate-500 text-sm font-medium">Đang tải sản phẩm...</p>
+      </div>
+    );
+  }
+
+  if (productError && productId) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center bg-background-light gap-4">
+        <span className="material-symbols-outlined text-4xl text-red-400">error</span>
+        <p className="text-red-500 font-medium">{productError}</p>
+        <button onClick={() => navigate(-1)} className="px-4 py-2 bg-slate-100 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors">
+          Quay lại
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background-light font-display text-slate-900">
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -718,9 +897,9 @@ const DesignerPage = () => {
           </div>
 
           <div className="hidden md:flex flex-col">
-            <h2 className="text-sm font-bold leading-tight tracking-tight">Classic Tee</h2>
+            <h2 className="text-sm font-bold leading-tight tracking-tight">{product?.name || 'Classic Tee'}</h2>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-              {(BASE_PRICE * quantity).toLocaleString('vi-VN')} đ
+              {((product?.basePrice ?? BASE_PRICE) * quantity).toLocaleString('vi-VN')} đ
             </p>
           </div>
         </div>
@@ -734,6 +913,9 @@ const DesignerPage = () => {
               <span className="material-symbols-outlined text-base">restart_alt</span>
               <span>Reset</span>
             </button>
+            {renderError && (
+              <p className="text-xs text-red-500 font-medium max-w-[200px] truncate" title={renderError}>{renderError}</p>
+            )}
             <button
               onClick={addToCart}
               disabled={isAdded}

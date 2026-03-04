@@ -1,11 +1,43 @@
-import { useNavigate } from 'react-router-dom';
-import React, { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import html2canvas from 'html2canvas';
+import { baseProductService } from '../services/api';
+
+const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
 
 const DesignEditor = () => {
     const navigate = useNavigate();
+    const { productId } = useParams();
     const [zoom, setZoom] = useState(85);
     const [isAdded, setIsAdded] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [isTryingOn, setIsTryingOn] = useState(false);
+    const [product, setProduct] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const mockupRef = useRef(null);
+
+    // Fetch product data
+    useEffect(() => {
+        const fetchProduct = async () => {
+            if (!productId) {
+                setLoading(false);
+                return;
+            }
+            try {
+                const response = await baseProductService.getById(productId);
+                console.log('DesignEditor API Response:', response.data);
+                setProduct(response.data?.data || response.data || null);
+            } catch (err) {
+                console.error('Failed to fetch product:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProduct();
+    }, [productId]);
+
+    const productName = product?.name || 'Custom Product';
+    const productImage = product?.imageUrl || DEFAULT_IMAGE;
 
     const handleAddToCart = () => {
         setIsAdded(true);
@@ -13,6 +45,40 @@ const DesignEditor = () => {
         setTimeout(() => setIsAdded(false), 2000);
         setTimeout(() => setShowToast(false), 4000);
     };
+
+    const handleTryOn = async () => {
+        setIsTryingOn(true);
+        try {
+            if (mockupRef.current) {
+                const canvas = await html2canvas(mockupRef.current, {
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: null,
+                    scale: 2,
+                });
+                const dataUrl = canvas.toDataURL('image/png');
+                localStorage.setItem('pod_tryon_design', dataUrl);
+                navigate('/home/virtual-try-on');
+            }
+        } catch (err) {
+            console.error('Failed to capture design:', err);
+            localStorage.setItem('pod_tryon_design', productImage);
+            navigate('/home/virtual-try-on');
+        } finally {
+            setIsTryingOn(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-background-light">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                    <p className="text-slate-500 text-sm font-medium">Loading editor...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-screen overflow-hidden bg-background-light  font-display text-slate-900 ">
@@ -41,7 +107,7 @@ const DesignEditor = () => {
                     {/* Editor Info */}
                     <div className="hidden md:flex flex-col">
                         <h2 className="text-sm font-bold leading-tight tracking-tight">Design Editor</h2>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Customizing: Classic Tee</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Customizing: {productName}</p>
                     </div>
                 </div>
 
@@ -50,6 +116,15 @@ const DesignEditor = () => {
                     <div className="flex items-center gap-4 sm:gap-6 pr-4 sm:pr-6 border-r border-slate-200">
                         <button className="hidden sm:flex min-w-[84px] items-center justify-center rounded-lg h-9 px-4 border border-slate-300 hover:bg-slate-100 text-sm font-bold transition-all">
                             <span>Preview</span>
+                        </button>
+                        <button
+                            onClick={handleTryOn}
+                            disabled={isTryingOn}
+                            className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 bg-gradient-to-r from-primary/20 to-emerald-100 border border-primary/30 text-sm font-bold text-[#11221c] hover:from-primary/30 hover:to-emerald-200 transition-all gap-1.5 disabled:opacity-50"
+                            title="Try this design on your photo"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">{isTryingOn ? 'hourglass_top' : 'checkroom'}</span>
+                            <span>{isTryingOn ? 'Capturing...' : 'Try On 👕'}</span>
                         </button>
                         <button
                             onClick={handleAddToCart}
@@ -132,12 +207,6 @@ const DesignEditor = () => {
                             <div className="group relative aspect-square bg-white  rounded-lg border border-slate-200  p-2 hover:border-primary transition-all cursor-pointer">
                                 <div className="w-full h-full bg-center bg-no-repeat bg-contain" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuARp2FXhsnMLUhbVvxOhAWZHBjZAraArJhXGQgQ_5bKI43w1TYvBy6k9BDDgD8Vx5HovRPRtfUZc5JPsqV9a3jC7WeuEDgFD3uHGQFBx3ihCJ2BMKBSOmq3GC1otcDT3oy0EHe_jrkTwuMzUA3KgheKnfvWcX4nYILaxKF5-HnhmmT2UIsWmrnjhMJhV80YdSMgzQPMwmMwVoXcmGQc50D-pS0ha7_d75XWF1V74FVCbY9NxROQkLOQ2CrxDqAnkG85AwiMG9mx55w")' }}></div>
                             </div>
-                            <div className="group relative aspect-square bg-white  rounded-lg border border-slate-200  p-2 hover:border-primary transition-all cursor-pointer">
-                                <div className="w-full h-full bg-center bg-no-repeat bg-contain" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuB3aSdC4vc9KQuH_6oHIA-mLUlZs9heuxOFu8sqMPtw4guG5ZMmWTVzFkTwxCtlrTgyK_Xghxcl0cEmKJFfHbD6eYCh2MW8UsHUx-Jy9VPXjfVrrw0avyD-AsfRZ2sawIO3h_1i2-r-v5fTcMcu5dgxpykoVqFvY2kq_qlS9OhAMCgwXGXvKWxvYgL8ZExIVFLWcYc_jIAw7z_oiU9kClc_l_pcpgiMOrXBPU65McC2iQLjpyEoMeNpUed9Y-LslSUBaNI3w6-yu18")' }}></div>
-                            </div>
-                            <div className="group relative aspect-square bg-white  rounded-lg border border-slate-200  p-2 hover:border-primary transition-all cursor-pointer">
-                                <div className="w-full h-full bg-center bg-no-repeat bg-contain" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCIY_6U8Lc_gTrZKu9EReo05GGo-DBtbIde-pflAmomYWSHiT0rsWTnvGvzwJHDgflbaFth7rHZ30DPNvBwIyLBUiHY1-3Dn02VYrG2OlODH8IXP0A1eM2wxRrgkINW6-WYCZinUyIS_xR_YUuy2iO4Y_q5vOUpB5rEzCubGmSgvHFE9qf0DBWYMQ_G6Sxcj198bffbZKfJbNWmNlS572eie64MxVPqBPYM9dh-nelS_R74WFGpkZVK8tbhgaGNlHtgxxe1ZFpHza0")' }}></div>
-                            </div>
                         </div>
                         <button className="w-full mt-6 py-2 border-2 border-dashed border-slate-300  rounded-lg text-xs font-medium text-slate-500 hover:text-primary hover:border-primary transition-all">
                             + Upload Custom Asset
@@ -167,9 +236,9 @@ const DesignEditor = () => {
                     </div>
 
                     {/* Main Mockup Container */}
-                    <div className="relative w-full max-w-2xl aspect-[4/5] flex items-center justify-center">
+                    <div ref={mockupRef} className="relative w-full max-w-2xl aspect-[4/5] flex items-center justify-center">
                         {/* T-Shirt Image */}
-                        <div className="absolute inset-0 bg-center bg-no-repeat bg-contain drop-shadow-2xl" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDXOBH11sjOJZgf-HI_Rc11_MqGEZatI6ZyvXVpjSc4O5K7-4lmPWMBlqCnkRFt-oCOHux0yRDIyztvyee1EDDtvHN7aVr6-y318SBpMWwGa4D40v3Jps-iEyByG9wW5rXoXddAAAx3qa8KsIsjD0CiCPwGgYqt9AZy1CfJDFVZw5amtcojSPm3IpY4h5TJcfGtdJMJ2wh4YyRkXfUt5rbXpbNtFm1C1JZq5aor2YYaiRDty8KF_xZYuRgHFWwuO2nxTTSibc2XSVE")' }}>
+                        <div className="absolute inset-0 bg-center bg-no-repeat bg-contain drop-shadow-2xl" style={{ backgroundImage: `url("${productImage}")` }}>
                         </div>
                         {/* Print Area Bounds */}
                         <div className="relative w-1/2 h-2/3 border-2 border-dashed border-primary/40 rounded flex items-center justify-center group">
@@ -263,18 +332,6 @@ const DesignEditor = () => {
                                         <span className="material-symbols-outlined text-sm cursor-pointer hover:text-primary">lock_open</span>
                                     </div>
                                 </div>
-                                {/* Layer Item 3 */}
-                                <div className="flex items-center gap-3 p-2 opacity-50 hover:bg-slate-50  border border-transparent rounded-lg transition-colors">
-                                    <span className="material-symbols-outlined text-sm text-slate-400">drag_indicator</span>
-                                    <div className="size-8 bg-slate-100  rounded flex items-center justify-center">
-                                        <span className="material-symbols-outlined text-sm">image</span>
-                                    </div>
-                                    <span className="text-xs font-medium flex-1 truncate">Logo_Overlay</span>
-                                    <div className="flex gap-2">
-                                        <span className="material-symbols-outlined text-sm cursor-pointer hover:text-primary">visibility_off</span>
-                                        <span className="material-symbols-outlined text-sm cursor-pointer hover:text-primary">lock</span>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -303,7 +360,7 @@ const DesignEditor = () => {
                     </div>
                     <div className="flex-1">
                         <h4 className="font-bold text-white text-sm">Design Saved & Added</h4>
-                        <p className="text-xs text-slate-400 mt-0.5">Custom T-Shirt (Project: Summer_Collection_2024)</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Custom {productName}</p>
                     </div>
                     <button
                         onClick={() => navigate('/home/cart')}
