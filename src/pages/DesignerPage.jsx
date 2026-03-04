@@ -8,7 +8,7 @@ const TSHIRT_IMAGES = {
   white: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531029/eb27d4f3c94b0c054236bc357a1d5d16_bkthgf.webp',
   black: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531007/75a7660e97a621ac51a909c3fa46103f_g3whtg.webp',
 };
-const PRINT_AREA_WIDTH = 700;
+const PRINT_AREA_WIDTH = 400;
 const PRINT_AREA_HEIGHT = 600;
 
 const PRINT_AREA_LEFT = (CANVAS_WIDTH - PRINT_AREA_WIDTH) / 2;
@@ -22,6 +22,27 @@ const STICKERS = [
   { id: 3, label: 'Bolt',  src: '/assets/stickers/bolt.svg'  },
 ];
 
+const HISTORY_LIMIT = 30;
+const BASE_PRICE = 299000;
+const SIZES = ['S', 'M', 'L', 'XL', 'XXL'];
+
+const createPrintAreaClipPath = () =>
+  new fabric.Rect({
+    left: PRINT_AREA_LEFT,
+    top: PRINT_AREA_TOP,
+    width: PRINT_AREA_WIDTH,
+    height: PRINT_AREA_HEIGHT,
+    originX: 'left',
+    originY: 'top',
+    absolutePositioned: true,
+  });
+
+const applyPrintAreaClip = (obj) => {
+  if (!obj || obj.data?.isTshirtBg || obj.data?.isPrintArea) return;
+  obj.set('clipPath', createPrintAreaClipPath());
+  obj.set('visible', true);
+};
+
 const DesignerPage = () => {
   const navigate = useNavigate();
   const canvasRef = useRef(null);
@@ -32,11 +53,18 @@ const DesignerPage = () => {
   const [newFontFamily, setNewFontFamily] = useState('Manrope, sans-serif');
   const [newFontSize, setNewFontSize] = useState(24);
   const [newTextColor, setNewTextColor] = useState('#000000');
+  const [newFontWeight, setNewFontWeight] = useState('normal');
+  const [newFontStyle, setNewFontStyle] = useState('normal');
   const [zoom, setZoom] = useState(100);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const isPanningRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   const deleteSelectedRef = useRef(null);
+  const skipNextHistoryRef = useRef(false);
+  const hasSavedForInteractionRef = useRef(false);
+  const hasSavedForTextEditRef = useRef(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
   const fileInputRef = useRef(null);
   const [selectedObj, setSelectedObj] = useState(null);
@@ -44,6 +72,15 @@ const DesignerPage = () => {
   const [isAdded, setIsAdded] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [activeColor, setActiveColor] = useState('white');
+  const [designSide, setDesignSide] = useState('front');
+  const [selectedSize, setSelectedSize] = useState('M');
+  const [quantity, setQuantity] = useState(1);
+  const frontDesignRef = useRef('[]');
+  const backDesignRef = useRef('[]');
+  const frontUndoStackRef = useRef([]);
+  const frontRedoStackRef = useRef([]);
+  const backUndoStackRef = useRef([]);
+  const backRedoStackRef = useRef([]);
 
   const refreshLayers = useCallback((canvas) => {
     if (!canvas) return;
@@ -80,9 +117,138 @@ const DesignerPage = () => {
       props.fontSize = obj.fontSize;
       props.fill = obj.fill;
       props.fontFamily = obj.fontFamily;
+      props.fontWeight = obj.fontWeight || 'normal';
+      props.fontStyle = obj.fontStyle || 'normal';
     }
     setSelectedObj(props);
   }, []);
+
+  const getStacksForSide = useCallback((side) => ({
+    undo: side === 'front' ? frontUndoStackRef : backUndoStackRef,
+    redo: side === 'front' ? frontRedoStackRef : backRedoStackRef,
+  }), []);
+
+  const serializeDesignOnly = useCallback((canvas) => {
+    const objs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+    return JSON.stringify(objs.map((o) => o.toObject(['data'])));
+  }, []);
+
+  const saveHistoryState = useCallback((canvas, side = designSide) => {
+    if (!canvas || skipNextHistoryRef.current) return;
+    try {
+      const json = serializeDesignOnly(canvas);
+      const { undo, redo } = getStacksForSide(side);
+      undo.current.push(json);
+      if (undo.current.length > HISTORY_LIMIT) undo.current.shift();
+      redo.current = [];
+      const isCurrent = side === designSide;
+      if (isCurrent) {
+        setCanUndo(undo.current.length > 0);
+        setCanRedo(false);
+      }
+    } catch (_) {}
+  }, [designSide, getStacksForSide, serializeDesignOnly]);
+
+  const restoreDesignFromJson = useCallback((canvas, jsonStr, onDone) => {
+    const designObjs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+    designObjs.forEach((o) => canvas.remove(o));
+    let designArr;
+    try { designArr = JSON.parse(jsonStr || '[]'); } catch { designArr = []; }
+    if (designArr.length === 0) {
+      canvas.renderAll();
+      refreshLayers(canvas);
+      onDone?.();
+      return;
+    }
+    fabric.util.enlivenObjects(designArr).then((enlivened) => {
+      enlivened.forEach((obj) => {
+        canvas.add(obj);
+        applyPrintAreaClip(obj);
+      });
+      enforceLayering(canvas);
+      canvas.renderAll();
+      refreshLayers(canvas);
+      onDone?.();
+    });
+  }, [refreshLayers]);
+
+  const undo = useCallback(() => {
+    const canvas = fabricRef.current;
+    const { undo: undoStack, redo: redoStack } = getStacksForSide(designSide);
+    if (!canvas || undoStack.current.length === 0) return;
+    const state = undoStack.current.pop();
+    redoStack.current.push(serializeDesignOnly(canvas));
+    skipNextHistoryRef.current = true;
+    restoreDesignFromJson(canvas, state, () => {
+      setSelectedObj(null);
+      skipNextHistoryRef.current = false;
+      setCanUndo(undoStack.current.length > 0);
+      setCanRedo(true);
+    });
+  }, [designSide, getStacksForSide, serializeDesignOnly, restoreDesignFromJson]);
+
+  const redo = useCallback(() => {
+    const canvas = fabricRef.current;
+    const { undo: undoStack, redo: redoStack } = getStacksForSide(designSide);
+    if (!canvas || redoStack.current.length === 0) return;
+    const state = redoStack.current.pop();
+    undoStack.current.push(serializeDesignOnly(canvas));
+    skipNextHistoryRef.current = true;
+    restoreDesignFromJson(canvas, state, () => {
+      setSelectedObj(null);
+      skipNextHistoryRef.current = false;
+      setCanUndo(true);
+      setCanRedo(redoStack.current.length > 0);
+    });
+  }, [designSide, getStacksForSide, serializeDesignOnly, restoreDesignFromJson]);
+
+  const switchDesignSide = useCallback((newSide) => {
+    if (newSide === designSide) return;
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    const saveDesignToRef = () => {
+      const objs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+      return JSON.stringify(objs.map((o) => o.toObject(['data'])));
+    };
+
+    if (designSide === 'front') frontDesignRef.current = saveDesignToRef();
+    else backDesignRef.current = saveDesignToRef();
+
+    const designObjs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+    designObjs.forEach((o) => canvas.remove(o));
+
+    const otherJson = newSide === 'front' ? frontDesignRef.current : backDesignRef.current;
+    const otherDesign = (() => { try { return JSON.parse(otherJson || '[]'); } catch { return []; } })();
+
+    if (otherDesign.length === 0) {
+      canvas.renderAll();
+      refreshLayers(canvas);
+      setDesignSide(newSide);
+      const { undo, redo } = getStacksForSide(newSide);
+      setCanUndo(undo.current.length > 0);
+      setCanRedo(redo.current.length > 0);
+    } else {
+      fabric.util.enlivenObjects(otherDesign).then((enlivened) => {
+        enlivened.forEach((obj) => {
+          canvas.add(obj);
+          applyPrintAreaClip(obj);
+        });
+        enforceLayering(canvas);
+        refreshLayers(canvas);
+        canvas.renderAll();
+        setDesignSide(newSide);
+        const { undo, redo } = getStacksForSide(newSide);
+        setCanUndo(undo.current.length > 0);
+        setCanRedo(redo.current.length > 0);
+      });
+    }
+  }, [designSide, getStacksForSide, refreshLayers]);
+
+  const undoRef = useRef(undo);
+  const redoRef = useRef(redo);
+  undoRef.current = undo;
+  redoRef.current = redo;
 
   // ─── Fabric canvas helpers ────────────────────────────────────────
 
@@ -112,7 +278,7 @@ const DesignerPage = () => {
   };
 
   const addTshirtBackground = (canvas, url = TSHIRT_IMAGES.white) => {
-    fabric.FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
+    return fabric.FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
       if (!fabricRef.current) return;
       const scale = Math.min(CANVAS_WIDTH / img.width, CANVAS_HEIGHT / img.height);
       img.set({
@@ -169,40 +335,67 @@ const DesignerPage = () => {
       lockScalingFlip: true,
     });
 
+    const saveBeforeInteraction = () => {
+      if (!hasSavedForInteractionRef.current) {
+        hasSavedForInteractionRef.current = true;
+        saveHistoryState(canvas);
+      }
+    };
     canvas.on('object:moving', (e) => {
       const obj = e.target;
       if (obj.data?.isTshirtBg || obj.data?.isPrintArea) return;
-
-      const center = obj.getCenterPoint();
-      const clampedX = Math.max(PRINT_AREA_LEFT, Math.min(PRINT_AREA_RIGHT, center.x));
-      const clampedY = Math.max(PRINT_AREA_TOP, Math.min(PRINT_AREA_BOTTOM, center.y));
-
-      if (clampedX !== center.x || clampedY !== center.y) {
-        obj.setPositionByOrigin(
-          new fabric.Point(clampedX, clampedY),
-          'center',
-          'center',
-        );
-      }
+      saveBeforeInteraction();
       obj.setCoords();
     });
-
-    canvas.on('object:modified', (e) => {
-      syncSelectedProps(e.target);
-      refreshLayers(canvas);
+    canvas.on('object:scaling', (e) => {
+      const obj = e.target;
+      if (obj.data?.isTshirtBg || obj.data?.isPrintArea) return;
+      saveBeforeInteraction();
     });
+    canvas.on('object:rotating', (e) => {
+      const obj = e.target;
+      if (obj.data?.isTshirtBg || obj.data?.isPrintArea) return;
+      saveBeforeInteraction();
+    });
+
+    canvas.on('object:added', () => {});
+    canvas.on('object:removed', () => {});
     canvas.on('selection:created', (e) => syncSelectedProps(e.selected?.[0]));
     canvas.on('selection:updated', (e) => syncSelectedProps(e.selected?.[0]));
     canvas.on('selection:cleared', () => setSelectedObj(null));
+    canvas.on('mouse:dblclick', (e) => {
+      const t = e.target;
+      if (t?.type === 'textbox' && !t.data?.isTshirtBg && !t.data?.isPrintArea && !hasSavedForTextEditRef.current) {
+        hasSavedForTextEditRef.current = true;
+        saveHistoryState(canvas);
+      }
+    });
     canvas.on('text:changed', (e) => {
+      syncSelectedProps(e.target);
+      refreshLayers(canvas);
+    });
+    canvas.on('object:modified', (e) => {
+      hasSavedForInteractionRef.current = false;
+      hasSavedForTextEditRef.current = false;
       syncSelectedProps(e.target);
       refreshLayers(canvas);
     });
 
     fabricRef.current = canvas;
-    addTshirtBackground(canvas);
+    addTshirtBackground(canvas, TSHIRT_IMAGES.white).then(() => saveHistoryState(fabricRef.current));
 
     const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redoRef.current();
+        else undoRef.current();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redoRef.current();
+        return;
+      }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || e.target.isContentEditable) return;
@@ -229,6 +422,7 @@ const DesignerPage = () => {
     if (!canvas) return;
     fabric.FabricImage.fromURL(sticker.src).then((img) => {
       if (!fabricRef.current) return;
+      saveHistoryState(canvas);
       const maxSize = 100;
       const scale = Math.min(maxSize / img.width, maxSize / img.height);
       img.set({
@@ -239,6 +433,7 @@ const DesignerPage = () => {
         data: { stickerLabel: sticker.label },
       });
       canvas.add(img);
+      applyPrintAreaClip(img);
       canvas.setActiveObject(img);
       canvas.renderAll();
       refreshLayers(canvas);
@@ -248,18 +443,22 @@ const DesignerPage = () => {
   const addText = () => {
     const canvas = fabricRef.current;
     if (!canvas || !textValue.trim()) return;
+    saveHistoryState(canvas);
     const textbox = new fabric.Textbox(textValue, {
       left: CANVAS_WIDTH / 2, top: CANVAS_HEIGHT / 2,
       originX: 'center', originY: 'center',
       width: PRINT_AREA_WIDTH * 0.8,
       fontSize: newFontSize,
       fontFamily: newFontFamily,
+      fontWeight: newFontWeight,
+      fontStyle: newFontStyle,
       fill: newTextColor,
       textAlign: 'center',
       editable: true,
       selectable: true, hasControls: true, hasBorders: true,
     });
     canvas.add(textbox);
+    applyPrintAreaClip(textbox);
     canvas.setActiveObject(textbox);
     canvas.renderAll();
     setTextValue('');
@@ -271,6 +470,7 @@ const DesignerPage = () => {
     if (!canvas) return;
     fabric.FabricImage.fromURL(dataUrl).then((img) => {
       if (!fabricRef.current) return;
+      saveHistoryState(canvas);
       const maxSize = 150;
       const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
       img.set({
@@ -281,6 +481,7 @@ const DesignerPage = () => {
         data: { stickerLabel: fileName },
       });
       canvas.add(img);
+      applyPrintAreaClip(img);
       canvas.setActiveObject(img);
       canvas.renderAll();
       refreshLayers(canvas);
@@ -330,6 +531,7 @@ const DesignerPage = () => {
     const active = canvas.getActiveObjects();
     const removable = active.filter((obj) => !obj.data?.isTshirtBg && !obj.data?.isPrintArea);
     if (removable.length) {
+      saveHistoryState(canvas);
       removable.forEach((obj) => canvas.remove(obj));
       canvas.discardActiveObject();
       canvas.renderAll();
@@ -345,6 +547,7 @@ const DesignerPage = () => {
     const active = canvas.getActiveObject();
     if (!active || active.data?.isTshirtBg || active.data?.isPrintArea) return;
     active.clone().then((cloned) => {
+      saveHistoryState(canvas);
       cloned.set({ left: active.left + 20, top: active.top + 20 });
       canvas.add(cloned);
       canvas.setActiveObject(cloned);
@@ -358,6 +561,7 @@ const DesignerPage = () => {
     if (!canvas) return;
     const active = canvas.getActiveObject();
     if (!active || active.data?.isTshirtBg || active.data?.isPrintArea) return;
+    saveHistoryState(canvas);
     canvas.bringObjectToFront(active);
     enforceLayering(canvas);
     refreshLayers(canvas);
@@ -368,6 +572,7 @@ const DesignerPage = () => {
     if (!canvas) return;
     const active = canvas.getActiveObject();
     if (!active || active.data?.isTshirtBg || active.data?.isPrintArea) return;
+    saveHistoryState(canvas);
     canvas.sendObjectToBack(active);
     enforceLayering(canvas);
     refreshLayers(canvas);
@@ -378,15 +583,13 @@ const DesignerPage = () => {
     if (!canvas) return;
     canvas.clear();
     canvas.backgroundColor = 'transparent';
-    addTshirtBackground(canvas, TSHIRT_IMAGES[activeColor]);
+    addTshirtBackground(canvas, TSHIRT_IMAGES[activeColor]).then(() => saveHistoryState(canvas));
     setSelectedObj(null);
   };
 
-  const exportDesign = () => {
-    const canvas = fabricRef.current;
-    if (!canvas) return;
+  const serializeDesignObjects = (canvas) => {
     const designObjects = canvas.getObjects().filter((obj) => !obj.data?.isTshirtBg && !obj.data?.isPrintArea);
-    const objects = designObjects.map((obj) => {
+    return designObjects.map((obj) => {
       const base = {
         type: obj.type,
         left: Math.round(obj.left), top: Math.round(obj.top),
@@ -395,21 +598,40 @@ const DesignerPage = () => {
         originX: obj.originX, originY: obj.originY,
       };
       if (obj.type === 'textbox') {
-        return { ...base, text: obj.text, fontSize: obj.fontSize, fontFamily: obj.fontFamily, fill: obj.fill, textAlign: obj.textAlign, width: Math.round(obj.width) };
+        return { ...base, text: obj.text, fontSize: obj.fontSize, fontFamily: obj.fontFamily, fontWeight: obj.fontWeight || 'normal', fontStyle: obj.fontStyle || 'normal', fill: obj.fill, textAlign: obj.textAlign, width: Math.round(obj.width) };
       }
       if (obj.type === 'image' && obj.getSrc) {
         return { ...base, src: obj.getSrc() };
       }
       return base;
     });
-    const payload = {
-      canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
-      printArea: { left: PRINT_AREA_LEFT, top: PRINT_AREA_TOP, width: PRINT_AREA_WIDTH, height: PRINT_AREA_HEIGHT },
-      objects,
-      exportedAt: new Date().toISOString(),
-    };
-    console.log('[ExportDesign]', JSON.stringify(payload, null, 2));
+  };
 
+  const addToCart = () => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const frontObjs = designSide === 'front' ? serializeDesignObjects(canvas) : JSON.parse(frontDesignRef.current || '[]');
+    const backObjs = designSide === 'back' ? serializeDesignObjects(canvas) : JSON.parse(backDesignRef.current || '[]');
+    const pricePerUnit = BASE_PRICE / 25000;
+    const cartItem = {
+      id: Date.now(),
+      productId: 170,
+      title: 'Classic Tee - Custom Design',
+      color: activeColor === 'white' ? 'White' : 'Black',
+      size: selectedSize,
+      quantity,
+      price: pricePerUnit,
+      image: TSHIRT_IMAGES[activeColor],
+      isCustomDesign: true,
+      designPayload: {
+        frontDesign: frontObjs,
+        backDesign: backObjs,
+        canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+        printArea: { left: PRINT_AREA_LEFT, top: PRINT_AREA_TOP, width: PRINT_AREA_WIDTH, height: PRINT_AREA_HEIGHT },
+        garmentColor: activeColor,
+      },
+    };
+    navigate('/home/cart', { state: { newDesignItem: cartItem } });
     setIsAdded(true);
     setShowToast(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -419,6 +641,7 @@ const DesignerPage = () => {
   const updateSelectedProp = (prop, value) => {
     const canvas = fabricRef.current;
     if (!canvas || !selectedObj?.ref) return;
+    saveHistoryState(canvas);
     selectedObj.ref.set(prop, value);
     canvas.renderAll();
     syncSelectedProps(selectedObj.ref);
@@ -495,8 +718,10 @@ const DesignerPage = () => {
           </div>
 
           <div className="hidden md:flex flex-col">
-            <h2 className="text-sm font-bold leading-tight tracking-tight">Design Editor</h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Customizing: Classic Tee</p>
+            <h2 className="text-sm font-bold leading-tight tracking-tight">Classic Tee</h2>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              {(BASE_PRICE * quantity).toLocaleString('vi-VN')} đ
+            </p>
           </div>
         </div>
 
@@ -510,7 +735,7 @@ const DesignerPage = () => {
               <span>Reset</span>
             </button>
             <button
-              onClick={exportDesign}
+              onClick={addToCart}
               disabled={isAdded}
               className={`flex min-w-[110px] items-center justify-center rounded-lg h-9 px-4 text-sm font-bold transition-all duration-300 gap-2 ${
                 isAdded
@@ -521,7 +746,7 @@ const DesignerPage = () => {
               <span className="material-symbols-outlined text-[16px]">
                 {isAdded ? 'check_circle' : 'upload'}
               </span>
-              <span>{isAdded ? 'Exported!' : 'Export Design'}</span>
+              <span>{isAdded ? 'Added!' : 'Add to Cart'}</span>
             </button>
           </div>
 
@@ -725,6 +950,25 @@ const DesignerPage = () => {
                   </div>
                 </div>
 
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewFontWeight((v) => (v === 'bold' ? 'normal' : 'bold'))}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border text-sm font-bold transition-colors ${newFontWeight === 'bold' ? 'bg-primary text-[#11221c] border-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-primary'}`}
+                  >
+                    <span className="material-symbols-outlined text-lg">format_bold</span>
+                    Đậm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewFontStyle((v) => (v === 'italic' ? 'normal' : 'italic'))}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg border text-sm font-bold transition-colors ${newFontStyle === 'italic' ? 'bg-primary text-[#11221c] border-primary' : 'bg-white border-slate-200 text-slate-600 hover:border-primary'}`}
+                  >
+                    <span className="material-symbols-outlined text-lg">format_italic</span>
+                    Nghiêng
+                  </button>
+                </div>
+
                 <button
                   onClick={addText}
                   disabled={!textValue.trim()}
@@ -740,6 +984,8 @@ const DesignerPage = () => {
                     style={{
                       fontFamily: newFontFamily,
                       fontSize: `${Math.min(newFontSize, 32)}px`,
+                      fontWeight: newFontWeight,
+                      fontStyle: newFontStyle,
                       color: newTextColor,
                     }}
                     className="truncate max-w-full"
@@ -754,8 +1000,31 @@ const DesignerPage = () => {
 
         {/* ── Center: Canvas ──────────────────────────────────── */}
         <section className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] bg-[length:20px_20px]">
+          {/* Front/Back Toggle */}
+          <div className="absolute top-6 left-6 flex gap-2 z-10">
+            <button
+              onClick={() => switchDesignSide('front')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${designSide === 'front' ? 'bg-primary text-[#11221c]' : 'bg-white border border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}
+            >
+              Mặt trước
+            </button>
+            <button
+              onClick={() => switchDesignSide('back')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${designSide === 'back' ? 'bg-primary text-[#11221c]' : 'bg-white border border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}
+            >
+              Mặt sau
+            </button>
+          </div>
+
           {/* Contextual Toolbar */}
           <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-white shadow-2xl rounded-xl border border-slate-200 flex items-center p-1 z-10">
+            <button onClick={undo} disabled={!canUndo} className="p-2 hover:bg-slate-100 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" title="Undo (Ctrl+Z)">
+              <span className="material-symbols-outlined text-xl">undo</span>
+            </button>
+            <button onClick={redo} disabled={!canRedo} className="p-2 hover:bg-slate-100 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" title="Redo (Ctrl+Y)">
+              <span className="material-symbols-outlined text-xl">redo</span>
+            </button>
+            <div className="w-px h-6 bg-slate-200 mx-1"></div>
             <button onClick={duplicateSelected} className="p-2 hover:bg-slate-100 rounded-lg" title="Duplicate">
               <span className="material-symbols-outlined text-xl">content_copy</span>
             </button>
@@ -908,6 +1177,24 @@ const DesignerPage = () => {
                       <option value="Verdana, sans-serif">Verdana</option>
                     </select>
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedProp('fontWeight', (selectedObj.fontWeight || 'normal') === 'bold' ? 'normal' : 'bold')}
+                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded border text-sm font-bold transition-colors ${(selectedObj.fontWeight || 'normal') === 'bold' ? 'bg-primary text-[#11221c] border-primary' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-primary'}`}
+                    >
+                      <span className="material-symbols-outlined text-base">format_bold</span>
+                      Đậm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSelectedProp('fontStyle', (selectedObj.fontStyle || 'normal') === 'italic' ? 'normal' : 'italic')}
+                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded border text-sm font-bold transition-colors ${(selectedObj.fontStyle || 'normal') === 'italic' ? 'bg-primary text-[#11221c] border-primary' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-primary'}`}
+                    >
+                      <span className="material-symbols-outlined text-base">format_italic</span>
+                      Nghiêng
+                    </button>
+                  </div>
                   <p className="text-[10px] text-slate-400 italic">Double-click text on canvas to edit inline</p>
                 </div>
               </div>
@@ -950,6 +1237,51 @@ const DesignerPage = () => {
             </div>
           </div>
 
+          {/* Size & Quantity */}
+          <div className="p-4 border-t border-slate-200">
+            <p className="text-[10px] text-slate-500 uppercase font-bold mb-3 tracking-wider">Size</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {SIZES.map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setSelectedSize(size)}
+                  className={`min-w-[36px] py-2 px-3 rounded-lg text-sm font-bold transition-colors ${selectedSize === size ? 'bg-primary text-[#11221c]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 tracking-wider">Quantity</p>
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                className="size-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
+                className="w-14 text-center py-2 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary"
+              />
+              <button
+                onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                className="size-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <span className="text-xs text-slate-500">Tổng:</span>
+              <span className="text-sm font-bold text-slate-900">
+                {(BASE_PRICE * quantity).toLocaleString('vi-VN')} đ
+              </span>
+            </div>
+          </div>
+
           {/* Garment Color */}
           <div className="p-4 bg-slate-50 border-t border-slate-200">
             <p className="text-[10px] text-slate-500 uppercase font-bold mb-3 tracking-wider">Garment Color</p>
@@ -976,8 +1308,8 @@ const DesignerPage = () => {
             <span className="material-symbols-outlined text-[24px]">check_circle</span>
           </div>
           <div className="flex-1">
-            <h4 className="font-bold text-white text-sm">Design Exported</h4>
-            <p className="text-xs text-slate-400 mt-0.5">JSON logged to console — ready for backend</p>
+            <h4 className="font-bold text-white text-sm">Added to Cart</h4>
+            <p className="text-xs text-slate-400 mt-0.5">Custom design added — view cart to checkout</p>
           </div>
           <button
             onClick={() => navigate('/home/cart')}

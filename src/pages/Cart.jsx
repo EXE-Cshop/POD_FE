@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Cart = () => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // Mock cart data
     const [cartItems, setCartItems] = useState([
@@ -27,6 +28,14 @@ const Cart = () => {
             image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBcWFjI8XBegFLDDWDZmE_USMLx2E278vt7nuRFKQwDt6mDO_INQVvwxHjFlac8n_VpvMAD4X7iZbMlVBoZLEVqbM77yqesWevjAqElTJiwZQHBCaE4jDz3wMYt6NitdZSmp608ooYkJURN7g74yPAcVI9KDfIt2hKN2dV2DCcQ_X-55PyveyOSQXNvgtlPCzwWrLIORxEr1YVCYF_YGz4dG6MSdw_EyI2GCvDTu137wLiN367HCLGLHv9xTyBODrOR-8711xgY-4s"
         }
     ]);
+
+    useEffect(() => {
+        const newItem = location.state?.newDesignItem;
+        if (newItem) {
+            setCartItems((prev) => [newItem, ...prev]);
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, location.pathname, navigate]);
 
     const updateQuantity = (id, delta) => {
         setCartItems(items => items.map(item => {
