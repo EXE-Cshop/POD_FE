@@ -1,13 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import * as fabric from 'fabric';
-import { baseProductService, renderService } from '../services/api';
+import { baseProductService, productVariantService, renderService } from '../services/api';
+import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
-const TSHIRT_IMAGES = {
-  white: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531029/eb27d4f3c94b0c054236bc357a1d5d16_bkthgf.webp',
-  black: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772531007/75a7660e97a621ac51a909c3fa46103f_g3whtg.webp',
+const TSHIRT_IMAGES_FALLBACK = {
+  white: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772618145/MauAoTrang2_hd2m4x.jpg',
+  black: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772617682/b2a8c03b0b0761bb2bf0e4e6e7d5774b_nrk6ub.webp',
 };
 const PRINT_AREA_WIDTH = 400;
 const PRINT_AREA_HEIGHT = 600;
@@ -29,6 +30,7 @@ const STICKERS = [
 
 const HISTORY_LIMIT = 30;
 const BASE_PRICE = 299000;
+const POD_DESIGNER_DRAFT = 'pod_designer_draft';
 const SIZES = ['S', 'M', 'L', 'XL', 'XXL'];
 
 const createPrintAreaClipPath = () =>
@@ -55,6 +57,7 @@ const DesignerPage = () => {
   const fabricRef = useRef(null);
 
   const [product, setProduct] = useState(null);
+  const [variants, setVariants] = useState([]);
   const [productLoading, setProductLoading] = useState(!!productId);
   const [productError, setProductError] = useState(null);
   const [renderError, setRenderError] = useState(null);
@@ -91,20 +94,27 @@ const DesignerPage = () => {
   const frontRedoStackRef = useRef([]);
   const backUndoStackRef = useRef([]);
   const backRedoStackRef = useRef([]);
+  const canvasMountedRef = useRef(true);
 
-  // Fetch product when productId is present (from /design/:productId)
   useEffect(() => {
     if (!productId) {
       setProductLoading(false);
       setProduct(null);
+      setVariants([]);
       return;
     }
-    const fetchProduct = async () => {
+    const fetchData = async () => {
       setProductLoading(true);
       setProductError(null);
       try {
-        const res = await baseProductService.getById(productId);
-        setProduct(res.data?.data || res.data || null);
+        const [productRes, variantsRes] = await Promise.all([
+          baseProductService.getById(productId),
+          productVariantService.getByBaseProductId(productId),
+        ]);
+        const productData = productRes.data?.data || productRes.data || null;
+        setProduct(productData);
+        const variantList = variantsRes.data?.data?.content || variantsRes.data?.data || [];
+        setVariants(Array.isArray(variantList) ? variantList : []);
       } catch (err) {
         console.error('DesignerPage: fetch product failed', err);
         setProductError('Không thể tải thông tin sản phẩm.');
@@ -112,8 +122,33 @@ const DesignerPage = () => {
         setProductLoading(false);
       }
     };
-    fetchProduct();
+    fetchData();
   }, [productId]);
+
+  // Ánh xạ màu từ DB (Trắng/Đen) sang DesignerPage (white/black). Ưu tiên variant, rồi product.imageUrl.
+  const tshirtImages = React.useMemo(() => {
+    const map = { ...TSHIRT_IMAGES_FALLBACK };
+    const urlOf = (v) => v?.frontImageUrl || v?.front_image_url;
+    variants.forEach((v) => {
+      const url = urlOf(v);
+      if (!url) return;
+      const name = (v.colorName || v.color_name || '').toLowerCase();
+      if (name.includes('trắng') || name.includes('trang') || name.includes('white')) map.white = url;
+      else if (name.includes('đen') || name.includes('den') || name.includes('black')) map.black = url;
+    });
+    const productImg = product?.imageUrl || product?.image_url;
+    if (productImg) {
+      if (!map.white) map.white = productImg;
+      if (!map.black) map.black = productImg;
+    }
+    // Nếu chỉ có 1 màu (vd: Black Edition) thì dùng ảnh đó cho cả 2
+    if (map.white === map.black) return map;
+    const hasWhite = map.white !== TSHIRT_IMAGES_FALLBACK.white;
+    const hasBlack = map.black !== TSHIRT_IMAGES_FALLBACK.black;
+    if (hasWhite && !hasBlack) map.black = map.white;
+    if (hasBlack && !hasWhite) map.white = map.black;
+    return map;
+  }, [product, variants]);
 
   const refreshLayers = useCallback((canvas) => {
     if (!canvas) return;
@@ -310,26 +345,35 @@ const DesignerPage = () => {
     canvas.renderAll();
   };
 
-  const addTshirtBackground = (canvas, url = TSHIRT_IMAGES.white) => {
-    return fabric.FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
-      if (!fabricRef.current) return;
-      const scale = Math.min(CANVAS_WIDTH / img.width, CANVAS_HEIGHT / img.height);
-      img.set({
-        scaleX: scale, scaleY: scale,
-        left: CANVAS_WIDTH / 2, top: CANVAS_HEIGHT / 2,
-        originX: 'center', originY: 'center',
-        selectable: false, evented: false,
-        lockMovementX: true, lockMovementY: true,
-        lockScalingX: true, lockScalingY: true,
-        lockRotation: true,
-        hasControls: false, hasBorders: false,
-        hoverCursor: 'default',
-        data: { isTshirtBg: true },
+  const addTshirtBackground = (canvas, url) => {
+    const u = url ?? tshirtImages.white;
+    const fallbackUrl = (u === tshirtImages.white ? TSHIRT_IMAGES_FALLBACK.white : TSHIRT_IMAGES_FALLBACK.black);
+    const loadImg = (src, isFallback = false) =>
+      fabric.FabricImage.fromURL(src, { crossOrigin: 'anonymous' }).then((img) => {
+        if (!canvasMountedRef.current || !fabricRef.current) return;
+        if (img.width === 0 || img.height === 0) throw new Error('Image failed to load (0x0)');
+        if (isFallback) console.warn('DesignerPage: Using fallback t-shirt image', { url: src });
+        const scale = Math.min(CANVAS_WIDTH / img.width, CANVAS_HEIGHT / img.height);
+        img.set({
+          scaleX: scale, scaleY: scale,
+          left: CANVAS_WIDTH / 2, top: CANVAS_HEIGHT / 2,
+          originX: 'center', originY: 'center',
+          selectable: false, evented: false,
+          lockMovementX: true, lockMovementY: true,
+          lockScalingX: true, lockScalingY: true,
+          lockRotation: true,
+          hasControls: false, hasBorders: false,
+          hoverCursor: 'default',
+          data: { isTshirtBg: true },
+        });
+        canvas.add(img);
+        canvas.sendObjectToBack(img);
+        addPrintAreaOverlay(canvas);
+        refreshLayers(canvas);
       });
-      canvas.add(img);
-      canvas.sendObjectToBack(img);
-      addPrintAreaOverlay(canvas);
-      refreshLayers(canvas);
+    return loadImg(u).catch((err) => {
+      console.warn('DesignerPage: Failed to load t-shirt image, using fallback', { url: u, err });
+      return loadImg(fallbackUrl, true);
     });
   };
 
@@ -341,13 +385,18 @@ const DesignerPage = () => {
     const oldOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
     if (oldOverlay) canvas.remove(oldOverlay);
     setActiveColor(colorKey);
-    addTshirtBackground(canvas, TSHIRT_IMAGES[colorKey]);
+    addTshirtBackground(canvas, tshirtImages[colorKey]);
   };
 
   // ─── Canvas init ──────────────────────────────────────────────────
-
+  // Chỉ init khi đã tải xong (canvas nằm trong DOM). Khi productLoading=true thì canvas chưa được render.
   useEffect(() => {
-    const canvas = new fabric.Canvas(canvasRef.current, {
+    if (productLoading) return;
+    const el = canvasRef.current;
+    if (!el) return;
+
+    canvasMountedRef.current = true;
+    const canvas = new fabric.Canvas(el, {
       width: CANVAS_WIDTH,
       height: CANVAS_HEIGHT,
       backgroundColor: 'transparent',
@@ -415,7 +464,53 @@ const DesignerPage = () => {
     });
 
     fabricRef.current = canvas;
-    addTshirtBackground(canvas, TSHIRT_IMAGES.white).then(() => saveHistoryState(fabricRef.current));
+
+    const applyDraftIfExists = () => {
+      if (!canvasMountedRef.current) return;
+      let draft;
+      try {
+        const raw = sessionStorage.getItem(POD_DESIGNER_DRAFT);
+        if (!raw) return saveHistoryState(fabricRef.current);
+        draft = JSON.parse(raw);
+      } catch {
+        return saveHistoryState(fabricRef.current);
+      }
+      frontDesignRef.current = draft.frontDesign || '[]';
+      backDesignRef.current = draft.backDesign || '[]';
+      setDesignSide(draft.designSide || 'front');
+      setActiveColor(draft.activeColor || 'white');
+      setSelectedSize(draft.selectedSize || 'M');
+      setQuantity(draft.quantity ?? 1);
+      const currentJson = draft.designSide === 'front' ? draft.frontDesign : draft.backDesign;
+      restoreDesignFromJson(canvas, currentJson, () => {
+        sessionStorage.removeItem(POD_DESIGNER_DRAFT);
+      });
+    };
+
+    const maybeSwitchBgThenApply = (draft) => {
+      if (!canvasMountedRef.current) return;
+      if (draft && draft.activeColor === 'black') {
+        const oldBg = canvas.getObjects().find((o) => o.data?.isTshirtBg);
+        const oldOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
+        if (oldBg) canvas.remove(oldBg);
+        if (oldOverlay) canvas.remove(oldOverlay);
+        addTshirtBackground(canvas, tshirtImages.black).then(applyDraftIfExists);
+      } else {
+        applyDraftIfExists();
+      }
+    };
+
+    addTshirtBackground(canvas, tshirtImages.white).then(() => {
+      if (!canvasMountedRef.current) return;
+      let draft;
+      try {
+        const raw = sessionStorage.getItem(POD_DESIGNER_DRAFT);
+        draft = raw ? JSON.parse(raw) : null;
+      } catch {
+        draft = null;
+      }
+      maybeSwitchBgThenApply(draft);
+    });
 
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -442,11 +537,14 @@ const DesignerPage = () => {
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      canvasMountedRef.current = false;
       document.removeEventListener('keydown', handleKeyDown);
-      canvas.dispose();
+      try {
+        canvas.dispose();
+      } catch (_) {}
       fabricRef.current = null;
     };
-  }, []);
+  }, [productLoading]);
 
   // ─── Actions ──────────────────────────────────────────────────────
 
@@ -616,7 +714,7 @@ const DesignerPage = () => {
     if (!canvas) return;
     canvas.clear();
     canvas.backgroundColor = 'transparent';
-    addTshirtBackground(canvas, TSHIRT_IMAGES[activeColor]).then(() => saveHistoryState(canvas));
+    addTshirtBackground(canvas, tshirtImages[activeColor]).then(() => saveHistoryState(fabricRef.current));
     setSelectedObj(null);
   };
 
@@ -631,84 +729,60 @@ const DesignerPage = () => {
         originX: obj.originX, originY: obj.originY,
       };
       if (obj.type === 'textbox') {
-        return { ...base, text: obj.text, fontSize: obj.fontSize, fontFamily: obj.fontFamily, fontWeight: obj.fontWeight || 'normal', fontStyle: obj.fontStyle || 'normal', fill: obj.fill, textAlign: obj.textAlign, width: Math.round(obj.width) };
+        return { ...base, text: obj.text, fontSize: obj.fontSize, fontFamily: obj.fontFamily, fontWeight: obj.fontWeight || 'normal', fontStyle: obj.fontStyle || 'normal', fill: obj.fill, textAlign: obj.textAlign, width: Math.round(obj.width), _scaledDimensions: false };
       }
       if (obj.type === 'image' && obj.getSrc) {
         const w = obj.getScaledWidth?.() ?? obj.width * (obj.scaleX ?? 1);
         const h = obj.getScaledHeight?.() ?? obj.height * (obj.scaleY ?? 1);
-        return { ...base, src: obj.getSrc(), width: Math.round(w), height: Math.round(h) };
+        return { ...base, src: obj.getSrc(), width: Math.round(w), height: Math.round(h), _scaledDimensions: true };
       }
       return base;
-    });
-  };
-
-  /** Convert serialized design objects to RenderPrintRequest layers (mm-based) */
-  const serializedToRenderLayers = (objs) => {
-    return objs.map((obj, idx) => {
-      const left = obj.left ?? 0;
-      const top = obj.top ?? 0;
-      const w = obj.width ?? (obj.type === 'textbox' ? 100 : 0);
-      const h = obj.height ?? (obj.type === 'textbox' ? (obj.fontSize || 24) * 1.5 : 0);
-      const xMm = Math.max(0, (left - PRINT_AREA_LEFT) * PX_TO_MM);
-      const yMm = Math.max(0, (top - PRINT_AREA_TOP) * PX_TO_MM);
-      const widthMm = Math.max(0.1, w * PX_TO_MM);
-      const heightMm = Math.max(0.1, h * PX_TO_MM);
-      const base = {
-        type: obj.type === 'textbox' ? 'text' : 'image',
-        x_mm: xMm,
-        y_mm: yMm,
-        width_mm: widthMm,
-        height_mm: heightMm,
-        rotation_deg: obj.angle ?? 0,
-        z_index: idx,
-        opacity: obj.opacity ?? 1,
-      };
-      if (obj.type === 'textbox') {
-        return { ...base, text: obj.text || '', fontFamily: obj.fontFamily || 'Arial', fontSize: obj.fontSize || 24, fontColor: obj.fill || '#000000' };
-      }
-      let url = obj.src || '';
-      if (url && !url.startsWith('http')) {
-        url = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
-      }
-      return { ...base, url };
     });
   };
 
   /** Convert fabric design objects to RenderPrintRequest layers (mm-based) for backend */
   const designObjectsToRenderLayers = (fabricObjs) => {
     return fabricObjs.map((obj, idx) => {
-      const left = obj.left ?? 0;
-      const top = obj.top ?? 0;
-      const w = obj.getScaledWidth?.() ?? (obj.width * (obj.scaleX ?? 1));
-      const h = obj.getScaledHeight?.() ?? (obj.height * (obj.scaleY ?? 1));
-      const xMm = Math.max(0, (left - PRINT_AREA_LEFT) * PX_TO_MM);
-      const yMm = Math.max(0, (top - PRINT_AREA_TOP) * PX_TO_MM);
-      const widthMm = Math.max(0.1, w * PX_TO_MM);
-      const heightMm = Math.max(0.1, h * PX_TO_MM);
+      const left = toNum(obj.left, 0);
+      const top = toNum(obj.top, 0);
+      const w = obj.getScaledWidth?.() ?? toNum(obj.width, 1) * toNum(obj.scaleX, 1);
+      const h = obj.getScaledHeight?.() ?? toNum(obj.height, 1) * toNum(obj.scaleY, 1);
+      // Fabric uses center origin by default; backend expects top-left
+      const ox = obj.originX || 'center';
+      const oy = obj.originY || 'center';
+      let px = left;
+      let py = top;
+      if (ox === 'center') px -= w / 2;
+      else if (ox === 'right') px -= w;
+      if (oy === 'center') py -= h / 2;
+      else if (oy === 'bottom') py -= h;
+      const xMm = (px - PRINT_AREA_LEFT) * PX_TO_MM;
+      const yMm = (py - PRINT_AREA_TOP) * PX_TO_MM;
+      const widthMm = Math.max(0.1, toNum(w) * PX_TO_MM);
+      const heightMm = Math.max(0.1, toNum(h) * PX_TO_MM);
       const base = {
         type: obj.type === 'textbox' ? 'text' : 'image',
         x_mm: xMm,
         y_mm: yMm,
         width_mm: widthMm,
         height_mm: heightMm,
-        rotation_deg: obj.angle ?? 0,
+        rotation_deg: toNum(obj.angle, 0),
         z_index: idx,
-        opacity: obj.opacity ?? 1,
       };
       if (obj.type === 'textbox') {
         return {
           ...base,
-          text: obj.text || '',
-          fontFamily: obj.fontFamily || 'Arial',
-          fontSize: obj.fontSize || 24,
-          fontColor: obj.fill || '#000000',
+          text: String(obj.text ?? ''),
+          fontFamily: obj.fontFamily ?? 'Arial',
+          fontSize: toNum(obj.fontSize, 24),
+          fontColor: obj.fill ?? '#000000',
         };
       }
       let url = obj.getSrc?.() || obj.src || '';
-      if (url && !url.startsWith('http')) {
+      if (url && !url.startsWith('http') && !url.startsWith('data:')) {
         url = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
       }
-      return { ...base, url };
+      return { ...base, url: url || '', opacity: toNum(obj.opacity, 1) };
     });
   };
 
@@ -734,26 +808,40 @@ const DesignerPage = () => {
 
     try {
       if (frontSerialized.length > 0) {
-        const layers = designSide === 'front'
+        const layersRaw = designSide === 'front'
           ? designObjectsToRenderLayers(currentSideObjs)
           : serializedToRenderLayers(frontSerialized);
+        const layers = await ensureDataUrlsForLayers(layersRaw);
+        const garmentUrl = await ensureDataUrl(tshirtImages[activeColor] || '');
         const res = await renderService.renderPrintFile({
           width_mm: PRINT_AREA_WIDTH_MM,
           height_mm: PRINT_AREA_HEIGHT_MM,
           layers,
           dpi: 300,
+          garment_image_url: garmentUrl || undefined,
+          print_area_left_ratio: PRINT_AREA_LEFT / CANVAS_WIDTH,
+          print_area_top_ratio: PRINT_AREA_TOP / CANVAS_HEIGHT,
+          print_area_width_ratio: PRINT_AREA_WIDTH / CANVAS_WIDTH,
+          print_area_height_ratio: PRINT_AREA_HEIGHT / CANVAS_HEIGHT,
         });
         frontPrintUrl = res.data?.data?.file_url || res.data?.file_url;
       }
       if (backSerialized.length > 0) {
-        const layers = designSide === 'back'
+        const layersRaw = designSide === 'back'
           ? designObjectsToRenderLayers(currentSideObjs)
           : serializedToRenderLayers(backSerialized);
+        const layers = await ensureDataUrlsForLayers(layersRaw);
+        const garmentUrl = await ensureDataUrl(tshirtImages[activeColor] || '');
         const res = await renderService.renderPrintFile({
           width_mm: PRINT_AREA_WIDTH_MM,
           height_mm: PRINT_AREA_HEIGHT_MM,
           layers,
           dpi: 300,
+          garment_image_url: garmentUrl || undefined,
+          print_area_left_ratio: PRINT_AREA_LEFT / CANVAS_WIDTH,
+          print_area_top_ratio: PRINT_AREA_TOP / CANVAS_HEIGHT,
+          print_area_width_ratio: PRINT_AREA_WIDTH / CANVAS_WIDTH,
+          print_area_height_ratio: PRINT_AREA_HEIGHT / CANVAS_HEIGHT,
         });
         backPrintUrl = res.data?.data?.file_url || res.data?.file_url;
       }
@@ -776,7 +864,7 @@ const DesignerPage = () => {
       size: selectedSize,
       quantity,
       price: pricePerUnit,
-      image: TSHIRT_IMAGES[activeColor],
+      image: tshirtImages[activeColor],
       isCustomDesign: true,
       frontPrintUrl: frontPrintUrl || undefined,
       backPrintUrl: backPrintUrl || undefined,
@@ -794,6 +882,44 @@ const DesignerPage = () => {
     setShowToast(true);
     setTimeout(() => setIsAdded(false), 2000);
     setTimeout(() => setShowToast(false), 4000);
+  };
+
+  const handleTryOn = () => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    const saveDesignToRef = () => {
+      const objs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+      return JSON.stringify(objs.map((o) => o.toObject(['data'])));
+    };
+    if (designSide === 'front') frontDesignRef.current = saveDesignToRef();
+    else backDesignRef.current = saveDesignToRef();
+
+    const draft = {
+      frontDesign: frontDesignRef.current,
+      backDesign: backDesignRef.current,
+      designSide,
+      activeColor,
+      productId: productId || null,
+      selectedSize,
+      quantity,
+    };
+    try {
+      sessionStorage.setItem(POD_DESIGNER_DRAFT, JSON.stringify(draft));
+      sessionStorage.setItem('pod_tryon_product_id', productId || '');
+
+      const printOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
+      if (printOverlay) printOverlay.set('visible', false);
+      canvas.renderAll();
+      const dataUrl = canvas.toDataURL('image/png');
+      if (printOverlay) printOverlay.set('visible', true);
+      canvas.renderAll();
+
+      localStorage.setItem('pod_tryon_design', dataUrl);
+      navigate('/home/virtual-try-on', { state: { fromDesigner: true, productId: productId || null } });
+    } catch (err) {
+      console.error('handleTryOn failed', err);
+    }
   };
 
   const updateSelectedProp = (prop, value) => {
@@ -826,12 +952,37 @@ const DesignerPage = () => {
     setZoom((z) => Math.max(25, Math.min(200, z + delta)));
   }, []);
 
+  const wheelContainerRef = useRef(null);
+  useEffect(() => {
+    const el = wheelContainerRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleCanvasWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleCanvasWheel);
+  }, [handleCanvasWheel]);
+
   const handlePanStart = useCallback((e) => {
     if (zoom <= 100) return;
-    if (e.button === 0) {
+    if (e.button !== 0) return;
+    const canvas = fabricRef.current;
+    const designObjs = canvas?.getObjects?.()?.filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea) ?? [];
+    if (designObjs.length === 0) {
       isPanningRef.current = true;
       panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
+      return;
     }
+    let clickedOnDesignLayer = false;
+    try {
+      const ptr = canvas.getScenePoint?.(e.nativeEvent) ?? canvas.getPointer?.(e.nativeEvent);
+      if (ptr) {
+        designObjs.forEach((obj) => {
+          obj.setCoords?.();
+          if (obj.containsPoint?.(ptr)) clickedOnDesignLayer = true;
+        });
+      }
+    } catch (_) {}
+    if (clickedOnDesignLayer) return;
+    isPanningRef.current = true;
+    panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
   }, [panOffset, zoom]);
 
   const handlePanMove = useCallback((e) => {
@@ -912,6 +1063,14 @@ const DesignerPage = () => {
             >
               <span className="material-symbols-outlined text-base">restart_alt</span>
               <span>Reset</span>
+            </button>
+            <button
+              onClick={handleTryOn}
+              className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 bg-gradient-to-r from-primary/20 to-emerald-100 border border-primary/30 text-sm font-bold text-[#11221c] hover:from-primary/30 hover:to-emerald-200 transition-all gap-2"
+              title="Thử đồ ảo với thiết kế hiện tại"
+            >
+              <span className="material-symbols-outlined text-base">checkroom</span>
+              <span>Try On</span>
             </button>
             {renderError && (
               <p className="text-xs text-red-500 font-medium max-w-[200px] truncate" title={renderError}>{renderError}</p>
@@ -1229,9 +1388,9 @@ const DesignerPage = () => {
 
           {/* Canvas Viewport (pan + zoom) */}
           <div
+            ref={wheelContainerRef}
             className="absolute inset-0 flex items-center justify-center overflow-hidden"
             style={{ cursor: zoom > 100 ? (isPanningRef.current ? 'grabbing' : 'grab') : 'default' }}
-            onWheel={handleCanvasWheel}
             onMouseDown={handlePanStart}
             onMouseMove={handlePanMove}
             onMouseUp={handlePanEnd}
@@ -1461,23 +1620,6 @@ const DesignerPage = () => {
               <span className="text-sm font-bold text-slate-900">
                 {(BASE_PRICE * quantity).toLocaleString('vi-VN')} đ
               </span>
-            </div>
-          </div>
-
-          {/* Garment Color */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200">
-            <p className="text-[10px] text-slate-500 uppercase font-bold mb-3 tracking-wider">Garment Color</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => switchTshirtBg('white')}
-                className={`size-6 rounded-full bg-white border-2 transition-all ${activeColor === 'white' ? 'border-primary ring-2 ring-primary/30' : 'border-slate-300 hover:border-slate-400'}`}
-                title="White"
-              ></button>
-              <button
-                onClick={() => switchTshirtBg('black')}
-                className={`size-6 rounded-full bg-black border-2 transition-all ${activeColor === 'black' ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-slate-400'}`}
-                title="Black"
-              ></button>
             </div>
           </div>
         </aside>
