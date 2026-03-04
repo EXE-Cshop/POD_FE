@@ -1,14 +1,197 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const API_URL = 'http://localhost:8080/api/v1/chatbot';
+const AI_RESPONSES = {
+    size: {
+        keywords: ['size', 'kích thước', 'cỡ', 'vừa', 'fit', 'sizing', 'bảng size'],
+        reply: "📏 Đây là hướng dẫn chọn size:\n\n• **S**: Ngực 86-90cm, Cao 155-165cm\n• **M**: Ngực 90-96cm, Cao 160-170cm\n• **L**: Ngực 96-102cm, Cao 165-175cm\n• **XL**: Ngực 102-108cm, Cao 170-180cm\n• **2XL**: Ngực 108-114cm, Cao 175-185cm\n\nBạn nặng bao nhiêu kg và cao bao nhiêu? Mình sẽ tư vấn size phù hợp nhất! 😊"
+    },
+    style: {
+        keywords: ['kiểu', 'style', 'mẫu', 'đẹp', 'hợp', 'phối', 'phù hợp', 'nên mặc', 'gợi ý', 'recommend'],
+        reply: "👕 Gợi ý phối đồ theo dáng người:\n\n• **Dáng gầy**: Áo oversize/relaxed fit, tạo cảm giác đầy đặn hơn\n• **Dáng cân đối**: Regular fit hoặc Slim fit đều hợp\n• **Dáng đầy đặn**: Áo regular fit, tránh quá ôm sát\n\n🎨 Màu yêu thích của bạn là gì? Mình sẽ gợi ý thiết kế phù hợp!"
+    },
+    shipping: {
+        keywords: ['ship', 'giao', 'delivery', 'vận chuyển', 'bao lâu', 'ngày'],
+        reply: "🚚 Thông tin giao hàng:\n\n• **Nội thành**: 1-2 ngày làm việc\n• **Ngoại thành**: 3-5 ngày làm việc\n• **Miễn phí ship** cho đơn từ 500K\n\nBạn cần biết thêm gì không? 😊"
+    },
+    order: {
+        keywords: ['đơn hàng', 'order', 'tracking', 'theo dõi', 'trạng thái'],
+        reply: "📦 Để kiểm tra đơn hàng, bạn vào mục **My Orders** trên thanh navigation nhé!\n\nNếu cần hỗ trợ thêm về đơn hàng, bạn cho mình mã đơn hàng nhé! 🔍"
+    },
+    design: {
+        keywords: ['thiết kế', 'design', 'custom', 'tùy chỉnh', 'in', 'print'],
+        reply: "🎨 Bạn có thể tự thiết kế áo tại **Design Editor**!\n\n1. Chọn sản phẩm từ Catalog\n2. Nhấn \"Customize This Product\"\n3. Upload hình, thêm text, chọn màu\n4. Nhấn **Try On** để xem trước trên người bạn!\n\nBắt đầu thiết kế ngay nhé? 🚀"
+    },
+    tryon: {
+        keywords: ['thử', 'try on', 'try-on', 'virtual', 'thử đồ', 'mặc thử'],
+        reply: "👗 Tính năng **Virtual Try-On** cho phép bạn:\n\n1. Thiết kế áo ở Design Editor\n2. Nhấn nút \"Try On\" để chụp thiết kế\n3. Upload ảnh cá nhân\n4. Xem áo đã thiết kế trên người bạn!\n\nHãy thử ngay tại trang Virtual Try-On nhé! ✨"
+    },
+    greeting: {
+        keywords: ['hi', 'hello', 'xin chào', 'chào', 'hey', 'alo'],
+        reply: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn:\n• 📏 Tư vấn chọn size phù hợp\n• 👕 Gợi ý kiểu áo hợp dáng\n• 🎨 Hướng dẫn thiết kế\n• 🚚 Thông tin giao hàng\n\nBạn cần hỗ trợ gì nhé?"
+    }
+};
+
+const SIZE_CHART = [
+    { size: 'S', minWeight: 40, maxWeight: 55, minHeight: 155, maxHeight: 165, chest: '86-90cm' },
+    { size: 'M', minWeight: 55, maxWeight: 65, minHeight: 160, maxHeight: 170, chest: '90-96cm' },
+    { size: 'L', minWeight: 63, maxWeight: 75, minHeight: 165, maxHeight: 175, chest: '96-102cm' },
+    { size: 'XL', minWeight: 73, maxWeight: 85, minHeight: 170, maxHeight: 180, chest: '102-108cm' },
+    { size: '2XL', minWeight: 83, maxWeight: 100, minHeight: 175, maxHeight: 190, chest: '108-114cm' },
+];
+
+function parseMeasurements(message) {
+    const lower = message.toLowerCase().replace(/,/g, '.').replace(/\s+/g, ' ');
+
+    let weight = null;
+    let height = null;
+
+    // Pattern: "65kg" or "65 kg" or "nặng 65" or "cân nặng 65"
+    const weightPatterns = [
+        /(\d{2,3})\s*kg/i,
+        /nặng\s*[:.]?\s*(\d{2,3})/i,
+        /cân\s*(?:nặng)?\s*[:.]?\s*(\d{2,3})/i,
+        /weight\s*[:.]?\s*(\d{2,3})/i,
+    ];
+
+    // Pattern: "170cm" or "170 cm" or "cao 170" or "chiều cao 170" or "1m70" or "1.70m"
+    const heightPatterns = [
+        /(\d{2,3})\s*cm/i,
+        /cao\s*[:.]?\s*(\d{2,3})/i,
+        /chiều\s*cao\s*[:.]?\s*(\d{2,3})/i,
+        /height\s*[:.]?\s*(\d{2,3})/i,
+        /(\d)[.,](\d{1,2})\s*m(?:et|ét)?/i,  // 1.70m, 1,70m
+        /(\d)\s*m\s*(\d{1,2})/i,              // 1m70
+    ];
+
+    for (const pattern of weightPatterns) {
+        const match = lower.match(pattern);
+        if (match) {
+            weight = parseInt(match[1]);
+            break;
+        }
+    }
+
+    for (const pattern of heightPatterns) {
+        const match = lower.match(pattern);
+        if (match) {
+            if (match[2] !== undefined) {
+                // Format like 1m70 or 1.70m
+                const meters = parseInt(match[1]);
+                const decimals = match[2].length === 1 ? parseInt(match[2]) * 10 : parseInt(match[2]);
+                height = meters * 100 + decimals;
+            } else {
+                height = parseInt(match[1]);
+                // If height < 100, might be in meters like "170" is fine, but "1" alone needs *100
+                if (height < 10) height = height * 100;
+            }
+            break;
+        }
+    }
+
+    // Try to find two standalone numbers if we still don't have both
+    if (weight === null || height === null) {
+        const numbers = lower.match(/\b(\d{2,3})\b/g);
+        if (numbers) {
+            const nums = numbers.map(Number);
+            for (const n of nums) {
+                if (n >= 130 && n <= 200 && height === null) {
+                    height = n;
+                } else if (n >= 30 && n <= 120 && weight === null) {
+                    weight = n;
+                }
+            }
+        }
+    }
+
+    if (weight !== null && (weight < 30 || weight > 150)) weight = null;
+    if (height !== null && (height < 130 || height > 210)) height = null;
+
+    return { weight, height };
+}
+
+function recommendSize(weight, height) {
+    let bestSize = null;
+    let bestScore = -Infinity;
+
+    for (const s of SIZE_CHART) {
+        let score = 0;
+
+        if (weight !== null) {
+            if (weight >= s.minWeight && weight <= s.maxWeight) {
+                score += 2;
+            } else {
+                const distW = Math.min(Math.abs(weight - s.minWeight), Math.abs(weight - s.maxWeight));
+                score -= distW * 0.1;
+            }
+        }
+
+        if (height !== null) {
+            if (height >= s.minHeight && height <= s.maxHeight) {
+                score += 2;
+            } else {
+                const distH = Math.min(Math.abs(height - s.minHeight), Math.abs(height - s.maxHeight));
+                score -= distH * 0.1;
+            }
+        }
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestSize = s;
+        }
+    }
+
+    return bestSize;
+}
+
+function getSizeReply(weight, height) {
+    const rec = recommendSize(weight, height);
+    if (!rec) return null;
+
+    let intro = '';
+    if (weight !== null && height !== null) {
+        intro = `Với chiều cao **${height}cm** và cân nặng **${weight}kg**`;
+    } else if (height !== null) {
+        intro = `Với chiều cao **${height}cm**`;
+    } else if (weight !== null) {
+        intro = `Với cân nặng **${weight}kg**`;
+    }
+
+    const fitNote = weight !== null && height !== null
+        ? (weight > rec.maxWeight ? '\n\n💡 *Nếu bạn thích mặc thoải mái hơn, có thể chọn lên 1 size nhé!*' :
+            weight < rec.minWeight ? '\n\n💡 *Nếu bạn thích áo ôm hơn, có thể chọn xuống 1 size nhé!*' : '')
+        : '';
+
+    return `${intro}, mình đề xuất bạn chọn size **${rec.size}** nhé! 👕\n\n📐 **Thông số size ${rec.size}:**\n• Số đo ngực: ${rec.chest}\n• Chiều cao phù hợp: ${rec.minHeight}-${rec.maxHeight}cm\n• Cân nặng phù hợp: ${rec.minWeight}-${rec.maxWeight}kg${fitNote}\n\n✅ Size **${rec.size}** sẽ vừa vặn và thoải mái nhất cho bạn!\n\nBạn có muốn biết thêm về cách phối đồ hoặc chọn kiểu áo không? 😊`;
+}
 
 const QUICK_ACTIONS = [
-    { label: '📏 Tư vấn Size', message: 'Tư vấn chọn size áo cho tôi' },
-    { label: '🎨 Hướng dẫn thiết kế', message: 'Hướng dẫn dùng Design Editor' },
-    { label: '👗 Thử đồ ảo', message: 'Hướng dẫn thử đồ ảo Virtual Try-On' },
-    { label: '🚚 Giao hàng', message: 'Thông tin giao hàng' },
-    { label: '🛒 Cách đặt hàng', message: 'Hướng dẫn cách đặt hàng' },
+    { label: '📏 Tư vấn Size', keyword: 'size' },
+    { label: '👕 Gợi ý Style', keyword: 'style' },
+    { label: '🎨 Hướng dẫn thiết kế', keyword: 'design' },
+    { label: '👗 Thử đồ ảo', keyword: 'tryon' },
+    { label: '🚚 Giao hàng', keyword: 'shipping' },
 ];
+
+function getAIReply(message) {
+    const lower = message.toLowerCase();
+
+    // Check for body measurements first (weight/height)
+    const { weight, height } = parseMeasurements(message);
+    if (weight !== null || height !== null) {
+        const sizeReply = getSizeReply(weight, height);
+        if (sizeReply) return sizeReply;
+    }
+
+    // Then check keyword-based responses
+    for (const [, data] of Object.entries(AI_RESPONSES)) {
+        for (const kw of data.keywords) {
+            if (lower.includes(kw)) {
+                return data.reply;
+            }
+        }
+    }
+    return "Cảm ơn bạn đã nhắn! 😊 Mình có thể hỗ trợ bạn về:\n• Tư vấn size & style\n• Hướng dẫn thiết kế\n• Thử đồ ảo\n• Thông tin giao hàng & đơn hàng\n\nBạn quan tâm chủ đề nào nhé?";
+}
 
 const AIChatbox = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -16,14 +199,13 @@ const AIChatbox = () => {
         {
             id: 1,
             sender: 'bot',
-            text: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn:\n• 📏 Tư vấn chọn size phù hợp\n• 🎨 Hướng dẫn thiết kế áo\n• 👗 Hướng dẫn thử đồ ảo\n• 🚚 Thông tin giao hàng & đơn hàng\n• 🖼️ **Đánh giá thiết kế** — gửi ảnh áo để AI review!\n\nBạn cần hỗ trợ gì nhé?",
+            text: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn tư vấn size, kiểu áo phù hợp, hoặc hướng dẫn thiết kế.\n\nBạn cần hỗ trợ gì nhé?",
             time: new Date()
         }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [hasUnread, setHasUnread] = useState(true);
-    const [designImage, setDesignImage] = useState(null); // base64 design image for review
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
@@ -38,93 +220,8 @@ const AIChatbox = () => {
         }
     }, [isOpen]);
 
-    // Listen for design review event from DesignEditor
-    useEffect(() => {
-        const handleDesignReview = (e) => {
-            const imageData = e.detail?.image || localStorage.getItem('pod_design_for_review');
-            if (imageData) {
-                setDesignImage(imageData);
-                setIsOpen(true);
-                // Auto-send review request
-                setTimeout(() => {
-                    sendDesignReview(imageData, 'Hãy đánh giá thiết kế áo này giúp mình! Nhận xét về bố cục, phối màu, tỉ lệ và cho gợi ý cải thiện.');
-                }, 500);
-            }
-        };
-
-        window.addEventListener('pod-design-review', handleDesignReview);
-        return () => window.removeEventListener('pod-design-review', handleDesignReview);
-    }, []);
-
-    const buildHistory = (currentMessages) => {
-        return currentMessages
-            .filter(m => m.id !== 1)
-            .map(m => ({
-                role: m.sender === 'user' ? 'user' : 'assistant',
-                content: m.text
-            }));
-    };
-
-    // Send design image for AI review
-    const sendDesignReview = async (imageData, text) => {
-        if (isTyping) return;
-
-        const userMsg = {
-            id: Date.now(),
-            sender: 'user',
-            text: text,
-            image: imageData, // store image for display
-            time: new Date()
-        };
-
-        const newMessages = [...messages, userMsg];
-        setMessages(newMessages);
-        setIsTyping(true);
-
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: text,
-                    history: buildHistory(newMessages).slice(-6),
-                    image: imageData,
-                }),
-            });
-
-            if (!response.ok) throw new Error(`Server error: ${response.status}`);
-            const data = await response.json();
-
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                sender: 'bot',
-                text: data.reply || 'Xin lỗi, mình không nhận được phản hồi.',
-                time: new Date()
-            }]);
-        } catch (error) {
-            console.error('Design review error:', error);
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                sender: 'bot',
-                text: 'Xin lỗi, mình đang gặp sự cố. Vui lòng thử lại sau nhé! 😊',
-                time: new Date()
-            }]);
-        } finally {
-            setIsTyping(false);
-            setDesignImage(null);
-            localStorage.removeItem('pod_design_for_review');
-        }
-    };
-
-    const sendMessage = async (text) => {
-        if (!text.trim() || isTyping) return;
-
-        // Check if there's a pending design image to review
-        if (designImage) {
-            sendDesignReview(designImage, text.trim());
-            setInputValue('');
-            return;
-        }
+    const sendMessage = (text) => {
+        if (!text.trim()) return;
 
         const userMsg = {
             id: Date.now(),
@@ -132,43 +229,21 @@ const AIChatbox = () => {
             text: text.trim(),
             time: new Date()
         };
-
-        const newMessages = [...messages, userMsg];
-        setMessages(newMessages);
+        setMessages(prev => [...prev, userMsg]);
         setInputValue('');
         setIsTyping(true);
 
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: text.trim(),
-                    history: buildHistory(newMessages).slice(-10),
-                }),
-            });
-
-            if (!response.ok) throw new Error(`Server error: ${response.status}`);
-            const data = await response.json();
-
+        setTimeout(() => {
+            const reply = getAIReply(text);
             setMessages(prev => [...prev, {
                 id: Date.now() + 1,
                 sender: 'bot',
-                text: data.reply || 'Xin lỗi, mình không nhận được phản hồi.',
+                text: reply,
                 time: new Date()
             }]);
-        } catch (error) {
-            console.error('Chatbot error:', error);
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                sender: 'bot',
-                text: 'Xin lỗi, mình đang gặp sự cố kết nối. Vui lòng thử lại sau nhé! 😊',
-                time: new Date()
-            }]);
-        } finally {
             setIsTyping(false);
             if (!isOpen) setHasUnread(true);
-        }
+        }, 800 + Math.random() * 1200);
     };
 
     const handleSubmit = (e) => {
@@ -176,23 +251,15 @@ const AIChatbox = () => {
         sendMessage(inputValue);
     };
 
-    const handleQuickAction = (message) => {
-        sendMessage(message);
-    };
-
-    // Manual design review — load from localStorage
-    const handleDesignReviewClick = () => {
-        const savedDesign = localStorage.getItem('pod_design_for_review') || localStorage.getItem('pod_tryon_design');
-        if (savedDesign) {
-            sendDesignReview(savedDesign, 'Hãy đánh giá thiết kế áo này giúp mình! Nhận xét về bố cục, phối màu, tỉ lệ và cho gợi ý cải thiện.');
-        } else {
-            setMessages(prev => [...prev, {
-                id: Date.now(),
-                sender: 'bot',
-                text: '⚠️ Chưa có thiết kế nào để đánh giá. Hãy vào **Design Editor** và bấm nút **🤖 AI Review** trên thanh công cụ để gửi thiết kế cho mình nhé!',
-                time: new Date()
-            }]);
-        }
+    const handleQuickAction = (keyword) => {
+        const labels = {
+            size: 'Tư vấn size cho tôi',
+            style: 'Gợi ý kiểu áo phù hợp',
+            design: 'Hướng dẫn thiết kế',
+            tryon: 'Thử đồ ảo như thế nào?',
+            shipping: 'Thông tin giao hàng',
+        };
+        sendMessage(labels[keyword] || keyword);
     };
 
     const formatMessage = (text) => {
@@ -249,9 +316,7 @@ const AIChatbox = () => {
                         </div>
                         <div className="flex-1">
                             <h3 className="text-white font-bold text-sm">POD Print AI</h3>
-                            <p className="text-emerald-400 text-xs font-medium">
-                                {isTyping ? '✍️ Đang trả lời...' : 'Online — Sẵn sàng tư vấn'}
-                            </p>
+                            <p className="text-emerald-400 text-xs font-medium">Online — Sẵn sàng tư vấn</p>
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}
@@ -272,12 +337,6 @@ const AIChatbox = () => {
                                 }`}
                                 style={msg.sender === 'bot' ? { background: 'rgba(255,255,255,0.06)' } : {}}
                             >
-                                {/* Show design image thumbnail if message has image */}
-                                {msg.image && (
-                                    <div className="mb-2 rounded-lg overflow-hidden border border-white/20">
-                                        <img src={msg.image} alt="Design" className="w-full max-h-[150px] object-contain bg-white/10" />
-                                    </div>
-                                )}
                                 {formatMessage(msg.text)}
                             </div>
                         </div>
@@ -305,39 +364,13 @@ const AIChatbox = () => {
                         <div className="flex flex-wrap gap-1.5">
                             {QUICK_ACTIONS.map(action => (
                                 <button
-                                    key={action.message}
-                                    onClick={() => handleQuickAction(action.message)}
-                                    disabled={isTyping}
-                                    className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-primary/20 text-xs text-slate-300 hover:text-primary border border-white/10 hover:border-primary/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    key={action.keyword}
+                                    onClick={() => handleQuickAction(action.keyword)}
+                                    className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-primary/20 text-xs text-slate-300 hover:text-primary border border-white/10 hover:border-primary/30 transition-all duration-200"
                                 >
                                     {action.label}
                                 </button>
                             ))}
-                            {/* Design Review quick action */}
-                            <button
-                                onClick={handleDesignReviewClick}
-                                disabled={isTyping}
-                                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 text-xs text-purple-300 hover:text-purple-200 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                🖼️ AI đánh giá thiết kế
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Design image pending indicator */}
-                {designImage && (
-                    <div className="px-4 pb-2">
-                        <div className="flex items-center gap-2 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                            <img src={designImage} alt="Design" className="size-10 rounded object-contain bg-white/10" />
-                            <div className="flex-1">
-                                <p className="text-xs text-purple-300 font-medium">Thiết kế đã sẵn sàng</p>
-                                <p className="text-[10px] text-slate-500">Gõ câu hỏi hoặc gửi để AI đánh giá</p>
-                            </div>
-                            <button onClick={() => { setDesignImage(null); localStorage.removeItem('pod_design_for_review'); }}
-                                className="text-slate-500 hover:text-white">
-                                <span className="material-symbols-outlined text-[14px]">close</span>
-                            </button>
                         </div>
                     </div>
                 )}
@@ -350,14 +383,13 @@ const AIChatbox = () => {
                             type="text"
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
-                            placeholder={designImage ? "Hỏi gì về thiết kế này..." : "Hỏi về size, thiết kế, thử đồ..."}
-                            disabled={isTyping}
-                            className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 outline-none disabled:opacity-50"
+                            placeholder="Hỏi về size, kiểu áo, thiết kế..."
+                            className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 outline-none"
                         />
                         <button
                             type="submit"
-                            disabled={!inputValue.trim() || isTyping}
-                            className={`size-8 rounded-lg flex items-center justify-center transition-all duration-200 ${inputValue.trim() && !isTyping
+                            disabled={!inputValue.trim()}
+                            className={`size-8 rounded-lg flex items-center justify-center transition-all duration-200 ${inputValue.trim()
                                 ? 'bg-primary text-[#11221c] hover:scale-105'
                                 : 'bg-white/5 text-slate-600'
                                 }`}
@@ -367,17 +399,6 @@ const AIChatbox = () => {
                     </div>
                 </form>
             </div>
-
-            <style>{`
-                @keyframes pulse-chat {
-                    0%, 100% { box-shadow: 0 0 0 0 rgba(56, 224, 120, 0.4); }
-                    50% { box-shadow: 0 0 0 12px rgba(56, 224, 120, 0); }
-                }
-                @keyframes typing-bounce {
-                    0%, 60%, 100% { transform: translateY(0); }
-                    30% { transform: translateY(-6px); }
-                }
-            `}</style>
         </>
     );
 };
