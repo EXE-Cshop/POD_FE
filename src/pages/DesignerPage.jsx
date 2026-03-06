@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import * as fabric from 'fabric';
-import { baseProductService, productVariantService, renderService } from '../services/api';
+import { baseProductService, productVariantService, renderService, stickerService } from '../services/api';
 import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
 
 const CANVAS_WIDTH = 800;
@@ -10,23 +10,18 @@ const TSHIRT_IMAGES_FALLBACK = {
   white: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772618145/MauAoTrang2_hd2m4x.jpg',
   black: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772617682/b2a8c03b0b0761bb2bf0e4e6e7d5774b_nrk6ub.webp',
 };
-const PRINT_AREA_WIDTH = 400;
-const PRINT_AREA_HEIGHT = 600;
+const PRINT_AREA_WIDTH = 305;
+const PRINT_AREA_HEIGHT = 500;
+const PRINT_AREA_TOP_OFFSET = 55;
 
 const PRINT_AREA_LEFT = (CANVAS_WIDTH - PRINT_AREA_WIDTH) / 2;
-const PRINT_AREA_TOP = (CANVAS_HEIGHT - PRINT_AREA_HEIGHT) / 2;
+const PRINT_AREA_TOP = (CANVAS_HEIGHT - PRINT_AREA_HEIGHT) / 2 + PRINT_AREA_TOP_OFFSET;
 /** Print area in mm (for backend RenderController). 400x600 px ≈ 100x150 mm at ~67 DPI. */
 const PRINT_AREA_WIDTH_MM = 100;
 const PRINT_AREA_HEIGHT_MM = 150;
 const PX_TO_MM = PRINT_AREA_WIDTH_MM / PRINT_AREA_WIDTH;
 const PRINT_AREA_RIGHT = PRINT_AREA_LEFT + PRINT_AREA_WIDTH;
 const PRINT_AREA_BOTTOM = PRINT_AREA_TOP + PRINT_AREA_HEIGHT;
-
-const STICKERS = [
-  { id: 1, label: 'Star',  src: '/assets/stickers/star.svg'  },
-  { id: 2, label: 'Heart', src: '/assets/stickers/heart.svg' },
-  { id: 3, label: 'Bolt',  src: '/assets/stickers/bolt.svg'  },
-];
 
 const HISTORY_LIMIT = 30;
 const BASE_PRICE = 299000;
@@ -88,6 +83,7 @@ const DesignerPage = () => {
   const [designSide, setDesignSide] = useState('front');
   const [selectedSize, setSelectedSize] = useState('M');
   const [quantity, setQuantity] = useState(1);
+  const [apiStickers, setApiStickers] = useState([]);
   const frontDesignRef = useRef('[]');
   const backDesignRef = useRef('[]');
   const frontUndoStackRef = useRef([]);
@@ -124,6 +120,15 @@ const DesignerPage = () => {
     };
     fetchData();
   }, [productId]);
+
+  useEffect(() => {
+    stickerService.getAll().then((res) => {
+      const list = res.data?.data ?? res.data ?? [];
+      setApiStickers(Array.isArray(list) ? list : []);
+    }).catch(() => setApiStickers([]));
+  }, []);
+
+  const allStickers = apiStickers;
 
   // Ánh xạ màu từ DB (Trắng/Đen) sang DesignerPage (white/black). Ưu tiên variant, rồi product.imageUrl.
   const tshirtImages = React.useMemo(() => {
@@ -324,10 +329,10 @@ const DesignerPage = () => {
     const rect = new fabric.Rect({
       width: PRINT_AREA_WIDTH,
       height: PRINT_AREA_HEIGHT,
-      left: CANVAS_WIDTH / 2,
-      top: CANVAS_HEIGHT / 2,
-      originX: 'center',
-      originY: 'center',
+      left: PRINT_AREA_LEFT,
+      top: PRINT_AREA_TOP,
+      originX: 'left',
+      originY: 'top',
       fill: 'transparent',
       stroke: '#13eca4',
       strokeWidth: 2,
@@ -551,7 +556,10 @@ const DesignerPage = () => {
   const addSticker = (sticker) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    fabric.FabricImage.fromURL(sticker.src).then((img) => {
+    const src = sticker.src ?? sticker.link;
+    const label = sticker.label ?? `Sticker #${sticker.id}`;
+    if (!src) return;
+    fabric.FabricImage.fromURL(src).then((img) => {
       if (!fabricRef.current) return;
       saveHistoryState(canvas);
       const maxSize = 100;
@@ -561,7 +569,7 @@ const DesignerPage = () => {
         left: CANVAS_WIDTH / 2, top: CANVAS_HEIGHT / 2,
         originX: 'center', originY: 'center',
         selectable: true, hasControls: true, hasBorders: true,
-        data: { stickerLabel: sticker.label },
+        data: { stickerLabel: label },
       });
       canvas.add(img);
       applyPrintAreaClip(img);
@@ -978,6 +986,24 @@ const DesignerPage = () => {
           obj.setCoords?.();
           if (obj.containsPoint?.(ptr)) clickedOnDesignLayer = true;
         });
+        if (!clickedOnDesignLayer) {
+          const active = canvas.getActiveObject?.();
+          if (active && !active.data?.isTshirtBg && !active.data?.isPrintArea) {
+            const coords = active.getCoords?.();
+            if (coords && coords.length >= 2) {
+              const pad = 50;
+              const xs = coords.map((c) => c.x);
+              const ys = coords.map((c) => c.y);
+              const minX = Math.min(...xs) - pad;
+              const maxX = Math.max(...xs) + pad;
+              const minY = Math.min(...ys) - pad;
+              const maxY = Math.max(...ys) + pad;
+              if (ptr.x >= minX && ptr.x <= maxX && ptr.y >= minY && ptr.y <= maxY) {
+                clickedOnDesignLayer = true;
+              }
+            }
+          }
+        }
       }
     } catch (_) {}
     if (clickedOnDesignLayer) return;
@@ -1205,19 +1231,19 @@ const DesignerPage = () => {
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 <div className="grid grid-cols-2 gap-3">
-                  {STICKERS.map((sticker) => (
+                  {allStickers.map((sticker) => (
                     <button
                       key={sticker.id}
                       onClick={() => addSticker(sticker)}
                       className="group relative aspect-square bg-white rounded-lg border border-slate-200 p-3 hover:border-primary transition-all cursor-pointer flex flex-col items-center justify-center gap-2"
                     >
                       <img
-                        src={sticker.src}
-                        alt={sticker.label}
+                        src={sticker.src ?? sticker.link}
+                        alt={sticker.label ?? `Sticker #${sticker.id}`}
                         className="w-full h-3/4 object-contain transition-transform group-hover:scale-110"
                         draggable={false}
                       />
-                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-primary">{sticker.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-primary">{sticker.label ?? `Sticker #${sticker.id}`}</span>
                     </button>
                   ))}
                 </div>
