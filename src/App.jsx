@@ -23,6 +23,7 @@ import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
 import VirtualTryOn from './pages/VirtualTryOn';
 import Upload from './pages/Upload';
+import CommunityDesigns from './pages/CommunityDesigns';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -55,6 +56,7 @@ function App() {
           <Route path="profile" element={<UserProfile />} />
           <Route path="virtual-try-on" element={<VirtualTryOn />} />
           <Route path="upload" element={<Upload />} />
+          <Route path="community-designs" element={<CommunityDesigns />} />
         </Route>
 
         {/* Customer Auth Routes */}

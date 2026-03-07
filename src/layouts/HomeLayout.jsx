@@ -28,6 +28,10 @@ const HomeLayout = () => {
                             <span className="material-symbols-outlined text-[16px]">checkroom</span>
                             Virtual Try-On
                         </Link>
+                        <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors flex items-center gap-1" to="/home/community-designs">
+                            <span className="material-symbols-outlined text-[16px]">share</span>
+                            Thiết kế cộng đồng
+                        </Link>
                     </nav>
                     <div className="flex items-center gap-4">
                         {/* Search Icon */}

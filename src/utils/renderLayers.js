@@ -73,25 +73,6 @@ export function serializedToRenderLayers(objs) {
   });
 }
 
-/** SVG → PNG via canvas (Batik doesn't support feDropShadow and some SVG filters). */
-async function svgToPngDataUrl(svgUrl) {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('SVG load failed'));
-    img.src = svgUrl;
-  });
-  const w = Math.max(1, img.naturalWidth || 256);
-  const h = Math.max(1, img.naturalHeight || 256);
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  return canvas.toDataURL('image/png');
-}
-
 /** Convert single image URL to data URL (for garment). Same-origin/cors-friendly. */
 export async function ensureDataUrl(url) {
   if (!url || url.startsWith('data:')) return url;
@@ -110,34 +91,48 @@ export async function ensureDataUrl(url) {
   }
 }
 
-/** Convert image URLs to data URLs. SVG → PNG on frontend (Batik can't handle feDropShadow etc). */
+/** Check if URL or blob is SVG (SVG not supported in render pipeline). */
+function isSvg(url, blobType) {
+  if (!url) return false;
+  const u = String(url).toLowerCase();
+  if (u.includes('.svg') || u.includes('image/svg+xml')) return true;
+  if (blobType && String(blobType).toLowerCase().includes('svg')) return true;
+  return false;
+}
+
+/** Convert image URLs to data URLs. SVG layers are rejected (use PNG/JPG). */
 export async function ensureDataUrlsForLayers(layers) {
-  return Promise.all(
-    layers.map(async (layer) => {
-      if (layer.type !== 'image' || !layer.url) return layer;
-      if (layer.url.startsWith('data:image/png')) return layer;
-      try {
-        const u = layer.url.toLowerCase();
-        const isSvg = u.includes('.svg') || u.includes('image/svg+xml');
-        if (isSvg) {
-          // Convert SVG → PNG in browser (Batik can't handle feDropShadow etc.)
-          return { ...layer, url: await svgToPngDataUrl(layer.url) };
-        }
-        const res = await fetch(layer.url, { mode: 'cors' });
-        const blob = await res.blob();
-        return {
-          ...layer,
-          url: await new Promise((resolve, reject) => {
-            const r = new FileReader();
-            r.onload = () => resolve(r.result);
-            r.onerror = reject;
-            r.readAsDataURL(blob);
-          }),
-        };
-      } catch (e) {
-        console.warn('Could not convert to data URL, using original:', layer.url, e);
-        return layer;
+  const result = [];
+  for (const layer of layers) {
+    if (layer.type !== 'image' || !layer.url) {
+      result.push(layer);
+      continue;
+    }
+    if (layer.url.startsWith('data:image/png') || layer.url.startsWith('data:image/jpeg')) {
+      result.push(layer);
+      continue;
+    }
+    if (isSvg(layer.url)) {
+      throw new Error('Thiết kế có chứa ảnh SVG không được hỗ trợ. Vui lòng sử dụng PNG hoặc JPG.');
+    }
+    try {
+      const res = await fetch(layer.url, { mode: 'cors' });
+      const blob = await res.blob();
+      if (isSvg(null, blob.type)) {
+        throw new Error('Thiết kế có chứa ảnh SVG không được hỗ trợ. Vui lòng sử dụng PNG hoặc JPG.');
       }
-    })
-  );
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+      result.push({ ...layer, url: dataUrl });
+    } catch (e) {
+      if (e.message?.includes('SVG')) throw e;
+      console.warn('Could not convert to data URL:', layer.url, e);
+      result.push(layer);
+    }
+  }
+  return result;
 }

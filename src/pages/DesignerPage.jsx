@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import * as fabric from 'fabric';
-import { baseProductService, productVariantService, renderService, stickerService } from '../services/api';
+import { baseProductService, productVariantService, renderService, stickerService, designProductService, uploadImage, API_ORIGIN } from '../services/api';
 import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
 
 const CANVAS_WIDTH = 800;
@@ -48,6 +48,9 @@ const applyPrintAreaClip = (obj) => {
 const DesignerPage = () => {
   const navigate = useNavigate();
   const { productId } = useParams();
+  const location = useLocation();
+  const sharedDesignIdRef = useRef(location.state?.sharedDesignId);
+  const editingDesignRef = useRef(location.state?.editingDesign);
   const canvasRef = useRef(null);
   const fabricRef = useRef(null);
 
@@ -84,6 +87,11 @@ const DesignerPage = () => {
   const [selectedSize, setSelectedSize] = useState('M');
   const [quantity, setQuantity] = useState(1);
   const [apiStickers, setApiStickers] = useState([]);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveIsPublic, setSaveIsPublic] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const frontDesignRef = useRef('[]');
   const backDesignRef = useRef('[]');
   const frontUndoStackRef = useRef([]);
@@ -233,16 +241,74 @@ const DesignerPage = () => {
       onDone?.();
       return;
     }
-    fabric.util.enlivenObjects(designArr).then((enlivened) => {
-      enlivened.forEach((obj) => {
-        canvas.add(obj);
-        applyPrintAreaClip(obj);
+    // Fix legacy: _scaledDimensions images had scaleX/scaleY baked into width/height
+    // Normalize image src: relative URLs -> absolute
+    designArr = designArr.map((o) => {
+      let next = o;
+      if (o._scaledDimensions && o.type === 'image') next = { ...next, scaleX: 1, scaleY: 1 };
+      if ((o.type === 'image' || o.type === 'FabricImage') && (o.src || o.url)) {
+        let url = String(o.src || o.url).trim();
+        if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+          next = { ...next, src: url.startsWith('/') ? `${API_ORIGIN}${url}` : `${API_ORIGIN}/${url}` };
+        }
+      }
+      return next;
+    });
+
+    const isImage = (o) => (o.type === 'image' || o.type === 'FabricImage') && (o.src || o.url);
+    const nonImageItems = designArr.filter((o) => !isImage(o));
+
+    const applyPropsToImage = (img, o) => {
+      const w = Number(o.width) || img.width || 1;
+      const h = Number(o.height) || img.height || 1;
+      const scaleX = (img.width && img.width > 0) ? w / img.width : (o.scaleX ?? 1);
+      const scaleY = (img.height && img.height > 0) ? h / img.height : (o.scaleY ?? 1);
+      img.set({
+        left: o.left ?? 0, top: o.top ?? 0,
+        scaleX, scaleY,
+        angle: o.angle ?? 0,
+        originX: o.originX ?? 'center', originY: o.originY ?? 'center',
+        selectable: true, hasControls: true, hasBorders: true,
+      });
+      if (o.opacity != null) img.set('opacity', o.opacity);
+    };
+
+    const addAllInOrder = (imageResults, enlivenedNonImages) => {
+      let imgIdx = 0, nonImgIdx = 0;
+      designArr.forEach((o) => {
+        if (isImage(o)) {
+          const img = imageResults[imgIdx++];
+          if (img) { canvas.add(img); applyPrintAreaClip(img); }
+        } else {
+          const obj = enlivenedNonImages[nonImgIdx++];
+          if (obj) { canvas.add(obj); applyPrintAreaClip(obj); }
+        }
       });
       enforceLayering(canvas);
       canvas.renderAll();
       refreshLayers(canvas);
       onDone?.();
-    });
+    };
+
+    const loadImagesThenFinish = (imageItems) => {
+      if (imageItems.length === 0) {
+        fabric.util.enlivenObjects(nonImageItems).then((enlivened) => addAllInOrder([], enlivened))
+          .catch((e) => { console.error('[restoreDesign] enlivenObjects failed', e); canvas.renderAll(); refreshLayers(canvas); onDone?.(); });
+        return;
+      }
+      Promise.all(imageItems.map((o) => {
+        const url = o.src || o.url;
+        return fabric.FabricImage.fromURL(url, { crossOrigin: 'anonymous' })
+          .then((img) => { applyPropsToImage(img, o); return img; })
+          .catch((err) => { console.warn('[restoreDesign] image load failed', url?.slice(0, 80), err); return null; });
+      })).then((imageResults) => {
+        fabric.util.enlivenObjects(nonImageItems)
+          .then((enlivened) => addAllInOrder(imageResults, enlivened))
+          .catch((e) => { console.error('[restoreDesign] enlivenObjects failed', e); imageResults.filter(Boolean).forEach((img) => { canvas.add(img); applyPrintAreaClip(img); }); canvas.renderAll(); refreshLayers(canvas); onDone?.(); });
+      });
+    };
+
+    loadImagesThenFinish(designArr.filter(isImage));
   }, [refreshLayers]);
 
   const undo = useCallback(() => {
@@ -353,6 +419,7 @@ const DesignerPage = () => {
   const addTshirtBackground = (canvas, url) => {
     const u = url ?? tshirtImages.white;
     const fallbackUrl = (u === tshirtImages.white ? TSHIRT_IMAGES_FALLBACK.white : TSHIRT_IMAGES_FALLBACK.black);
+    const altFallbackUrl = (u === tshirtImages.white ? TSHIRT_IMAGES_FALLBACK.black : TSHIRT_IMAGES_FALLBACK.white);
     const loadImg = (src, isFallback = false) =>
       fabric.FabricImage.fromURL(src, { crossOrigin: 'anonymous' }).then((img) => {
         if (!canvasMountedRef.current || !fabricRef.current) return;
@@ -377,8 +444,9 @@ const DesignerPage = () => {
         refreshLayers(canvas);
       });
     return loadImg(u).catch((err) => {
-      console.warn('DesignerPage: Failed to load t-shirt image, using fallback', { url: u, err });
-      return loadImg(fallbackUrl, true);
+      console.error('DesignerPage: Primary t-shirt image failed to load', { url: u, err: err?.message || err });
+      const nextUrl = (fallbackUrl === u) ? altFallbackUrl : fallbackUrl;
+      return loadImg(nextUrl, true);
     });
   };
 
@@ -492,6 +560,30 @@ const DesignerPage = () => {
       });
     };
 
+    const applySharedDesign = (data) => {
+      if (!canvasMountedRef.current || !data?.designJsonData) return;
+      const j = data.designJsonData;
+      const front = Array.isArray(j.frontDesign) ? j.frontDesign : [];
+      const back = Array.isArray(j.backDesign) ? j.backDesign : [];
+      const side = j.designSide || 'front';
+      const color = j.garmentColor || 'white';
+      console.log('[applySharedDesign] design loaded', { side, frontCount: front.length, backCount: back.length });
+      front.concat(back).forEach((o, i) => {
+        if (o?.type === 'image' && (o.src || o.url)) {
+          console.log(`[applySharedDesign] image[${i}] src=`, o.src || o.url, 'type=', typeof (o.src || o.url));
+        }
+      });
+      frontDesignRef.current = JSON.stringify(front);
+      backDesignRef.current = JSON.stringify(back);
+      setDesignSide(side);
+      setActiveColor(color);
+      setSelectedSize(j.selectedSize || 'M');
+      setQuantity(j.quantity ?? 1);
+      const currentJson = side === 'front' ? JSON.stringify(front) : JSON.stringify(back);
+      restoreDesignFromJson(canvas, currentJson);
+      sharedDesignIdRef.current = null;
+    };
+
     const maybeSwitchBgThenApply = (draft) => {
       if (!canvasMountedRef.current) return;
       if (draft && draft.activeColor === 'black') {
@@ -505,8 +597,31 @@ const DesignerPage = () => {
       }
     };
 
+    const maybeSwitchBgThenApplyShared = (data) => {
+      if (!canvasMountedRef.current) return;
+      const color = data?.designJsonData?.garmentColor || 'white';
+      if (color === 'black') {
+        const oldBg = canvas.getObjects().find((o) => o.data?.isTshirtBg);
+        const oldOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
+        if (oldBg) canvas.remove(oldBg);
+        if (oldOverlay) canvas.remove(oldOverlay);
+        addTshirtBackground(canvas, tshirtImages.black).then(() => applySharedDesign(data));
+      } else {
+        applySharedDesign(data);
+      }
+    };
+
     addTshirtBackground(canvas, tshirtImages.white).then(() => {
       if (!canvasMountedRef.current) return;
+      const sid = sharedDesignIdRef.current;
+      if (sid) {
+        designProductService.getById(sid).then((res) => {
+          const d = res.data?.data ?? res.data;
+          if (d) maybeSwitchBgThenApplyShared(d);
+          else maybeSwitchBgThenApply(null);
+        }).catch(() => maybeSwitchBgThenApply(null));
+        return;
+      }
       let draft;
       try {
         const raw = sessionStorage.getItem(POD_DESIGNER_DRAFT);
@@ -559,7 +674,7 @@ const DesignerPage = () => {
     const src = sticker.src ?? sticker.link;
     const label = sticker.label ?? `Sticker #${sticker.id}`;
     if (!src) return;
-    fabric.FabricImage.fromURL(src).then((img) => {
+    fabric.FabricImage.fromURL(src, { crossOrigin: 'anonymous' }).then((img) => {
       if (!fabricRef.current) return;
       saveHistoryState(canvas);
       const maxSize = 100;
@@ -627,22 +742,26 @@ const DesignerPage = () => {
     });
   };
 
-  const handleFileUpload = (files) => {
-    const validTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
-    Array.from(files).forEach((file) => {
-      if (!validTypes.includes(file.type)) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        const entry = {
-          id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-          name: file.name.replace(/\.[^.]+$/, ''),
-          src: dataUrl,
-        };
-        setUploadedImages((prev) => [entry, ...prev]);
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleFileUpload = async (files) => {
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const toProcess = Array.from(files).filter((f) => validTypes.includes(f.type));
+    for (const file of toProcess) {
+      const id = Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      const name = file.name.replace(/\.[^.]+$/, '');
+      setUploadedImages((prev) => [{ id, name, src: null, uploading: true }, ...prev]);
+      try {
+        const url = await uploadImage(file);
+        setUploadedImages((prev) => prev.map((img) => (img.id === id ? { ...img, src: url, uploading: false } : img)));
+      } catch (err) {
+        console.warn('Upload to Cloudinary failed, using data URL:', err?.message);
+        const dataUrl = await new Promise((resolve) => {
+          const r = new FileReader();
+          r.onload = (e) => resolve(e.target.result);
+          r.readAsDataURL(file);
+        });
+        setUploadedImages((prev) => prev.map((img) => (img.id === id ? { ...img, src: dataUrl, uploading: false } : img)));
+      }
+    }
   };
 
   const handleDrop = (e) => {
@@ -742,7 +861,8 @@ const DesignerPage = () => {
       if (obj.type === 'image' && obj.getSrc) {
         const w = obj.getScaledWidth?.() ?? obj.width * (obj.scaleX ?? 1);
         const h = obj.getScaledHeight?.() ?? obj.height * (obj.scaleY ?? 1);
-        return { ...base, src: obj.getSrc(), width: Math.round(w), height: Math.round(h), _scaledDimensions: true };
+        // scaleX/scaleY must be 1 when _scaledDimensions: true so Fabric enlivenObjects restores correct size (no double scaling)
+        return { ...base, scaleX: 1, scaleY: 1, src: obj.getSrc(), width: Math.round(w), height: Math.round(h), _scaledDimensions: true };
       }
       return base;
     });
@@ -930,6 +1050,66 @@ const DesignerPage = () => {
     }
   };
 
+  const handleSaveDesign = async () => {
+    const canvas = fabricRef.current;
+    if (!canvas || !saveName.trim()) return;
+    const frontStored = JSON.parse(frontDesignRef.current || '[]');
+    const backStored = JSON.parse(backDesignRef.current || '[]');
+    const currentObjs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+    const frontSerialized = designSide === 'front' ? serializeDesignObjects(canvas) : frontStored;
+    const backSerialized = designSide === 'back' ? serializeDesignObjects(canvas) : backStored;
+    const hasDesign = currentObjs.length > 0 || frontStored.length > 0 || backStored.length > 0;
+    if (!hasDesign) {
+      setSaveError('Vui lòng thêm ít nhất một phần tử vào thiết kế trước khi lưu.');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const designJsonData = {
+        frontDesign: frontSerialized,
+        backDesign: backSerialized,
+        canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+        printArea: { left: PRINT_AREA_LEFT, top: PRINT_AREA_TOP, width: PRINT_AREA_WIDTH, height: PRINT_AREA_HEIGHT },
+        garmentColor: activeColor,
+        designSide,
+        selectedSize,
+        quantity,
+      };
+      const ed = editingDesignRef.current;
+      if (ed?.id) {
+        await designProductService.update(ed.id, {
+          name: saveName.trim(),
+          isPublic: saveIsPublic,
+          designJsonData,
+          garmentImageUrl: tshirtImages[activeColor] || undefined,
+        });
+      } else {
+        await designProductService.create({
+          name: saveName.trim(),
+          designJsonData,
+          garmentImageUrl: tshirtImages[activeColor] || undefined,
+          baseProductId: productId ? Number(productId) : null,
+          isPublic: saveIsPublic,
+        });
+      }
+      editingDesignRef.current = null;
+      setShowSaveModal(false);
+      setSaveName('');
+      setSaveIsPublic(false);
+      setSaveError(null);
+      navigate('/home/community-designs', { state: { tab: 'my' } });
+    } catch (err) {
+      console.error('Save design failed:', err);
+      const res = err.response?.data;
+      let msg = res?.message || err.message || 'Không thể lưu thiết kế.';
+      if (Array.isArray(res?.data) && res.data.length) msg += ' ' + res.data.join(' ');
+      setSaveError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const updateSelectedProp = (prop, value) => {
     const canvas = fabricRef.current;
     if (!canvas || !selectedObj?.ref) return;
@@ -1091,6 +1271,25 @@ const DesignerPage = () => {
               <span>Reset</span>
             </button>
             <button
+              onClick={() => {
+                const ed = editingDesignRef.current;
+                if (ed) {
+                  setSaveName(ed.name || '');
+                  setSaveIsPublic(ed.isPublic ?? false);
+                } else {
+                  setSaveName('');
+                  setSaveIsPublic(false);
+                }
+                setSaveError(null);
+                setShowSaveModal(true);
+              }}
+              className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 border border-slate-300 hover:bg-slate-100 text-sm font-bold transition-all gap-2"
+              title="Lưu thiết kế"
+            >
+              <span className="material-symbols-outlined text-base">save</span>
+              <span>Lưu thiết kế</span>
+            </button>
+            <button
               onClick={handleTryOn}
               className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 bg-gradient-to-r from-primary/20 to-emerald-100 border border-primary/30 text-sm font-bold text-[#11221c] hover:from-primary/30 hover:to-emerald-200 transition-all gap-2"
               title="Thử đồ ảo với thiết kế hiện tại"
@@ -1185,7 +1384,7 @@ const DesignerPage = () => {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    accept="image/png,image/jpeg,image/webp"
                     multiple
                     className="hidden"
                     onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ''; }}
@@ -1196,14 +1395,21 @@ const DesignerPage = () => {
                 {uploadedImages.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
                     {uploadedImages.map((img) => (
-                      <div key={img.id} className="group relative aspect-square bg-white rounded-lg border border-slate-200 p-2 hover:border-primary transition-all cursor-pointer">
-                        <img
-                          src={img.src}
-                          alt={img.name}
-                          className="w-full h-full object-contain"
-                          draggable={false}
-                          onClick={() => addImageToCanvas(img.src, img.name)}
-                        />
+                      <div key={img.id} className={`group relative aspect-square bg-white rounded-lg border border-slate-200 p-2 transition-all ${img.src ? 'hover:border-primary cursor-pointer' : 'cursor-wait'}`}>
+                        {img.uploading || !img.src ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400">
+                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <span className="text-[10px]">Đang tải lên...</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={img.src}
+                            alt={img.name}
+                            className="w-full h-full object-contain"
+                            draggable={false}
+                            onClick={() => addImageToCanvas(img.src, img.name)}
+                          />
+                        )}
                         <button
                           onClick={(e) => { e.stopPropagation(); removeUploadedImage(img.id); }}
                           className="absolute -top-1.5 -right-1.5 size-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
@@ -1650,6 +1856,33 @@ const DesignerPage = () => {
           </div>
         </aside>
       </main>
+
+      {/* ── Save Design Modal ──────────────────────────────────── */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => !saving && setShowSaveModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900 mb-4">{editingDesignRef.current?.id ? 'Cập nhật thiết kế' : 'Lưu thiết kế'}</h3>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Tên thiết kế"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-primary mb-4"
+            />
+            <label className="flex items-center gap-2 mb-4 cursor-pointer">
+              <input type="checkbox" checked={saveIsPublic} onChange={(e) => setSaveIsPublic(e.target.checked)} className="rounded" />
+              <span className="text-sm font-medium text-slate-700">Chia sẻ với cộng đồng (công khai)</span>
+            </label>
+            {saveError && <p className="text-red-500 text-sm mb-4">{saveError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => !saving && setShowSaveModal(false)} className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold hover:bg-slate-50">Hủy</button>
+              <button onClick={handleSaveDesign} disabled={saving || !saveName.trim()} className="px-4 py-2 bg-primary text-[#11221c] rounded-lg text-sm font-bold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed">
+                {saving ? 'Đang lưu...' : 'Lưu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast Notification ─────────────────────────────────── */}
       <div className={`fixed bottom-8 right-8 z-50 transition-all duration-500 transform ${showToast ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
