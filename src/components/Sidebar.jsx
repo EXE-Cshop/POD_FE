@@ -25,6 +25,7 @@ const Sidebar = () => {
                     { name: 'Order Management', icon: 'shopping_cart', path: '/admin/orders' },
                     { name: 'Base Products', icon: 'inventory_2', path: '/admin/base-products' },
                     { name: 'Print Areas', icon: 'aspect_ratio', path: '/admin/print-areas' },
+                    { name: 'Stickers', icon: 'category', path: '/admin/stickers' },
                     { name: 'Scheduler', icon: 'schedule', path: '/admin/scheduler' },
                     { name: 'Roles & Permissions', icon: 'shield', path: '/admin/roles' },
                 ].map((item) => (

@@ -32,6 +32,7 @@ const Placeholder = ({ title }) => (
 );
 
 import AdminDashboard from './pages/AdminDashboard';
+import AdminStickers from './pages/AdminStickers';
 import SchedulerDashboard from './pages/SchedulerDashboard';
 
 function App() {
@@ -61,7 +62,7 @@ function App() {
           <Route path="login" element={<UserLogin />} />
           <Route path="register" element={<UserRegister />} />
         </Route>
-
+        <Route path="stickers" element={<AdminStickers />} />
         {/* Admin routes protected by ProtectedRoute */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
@@ -71,6 +72,7 @@ function App() {
             <Route path="orders" element={<PrintQueue />} />
             <Route path="base-products" element={<Inventory />} />
             <Route path="print-areas" element={<PrintAreas />} />
+            {/* <Route path="stickers" element={<AdminStickers />} /> */}
             <Route path="scheduler" element={<SchedulerDashboard />} />
             <Route path="roles" element={<Roles />} />
           </Route>

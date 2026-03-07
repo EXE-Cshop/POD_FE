@@ -51,4 +51,12 @@ export const renderService = {
     renderPrintFile: (body) => api.post('/renders/print', body),
 };
 
+export const stickerService = {
+    getAll: () => api.get('/stickers'),
+    getById: (id) => api.get(`/stickers/${id}`),
+    create: (data) => api.post('/stickers', data),
+    update: (id, data) => api.put(`/stickers/${id}`, data),
+    delete: (id) => api.delete(`/stickers/${id}`),
+};
+
 export default api;
