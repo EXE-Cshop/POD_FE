@@ -59,4 +59,8 @@ export const stickerService = {
     delete: (id) => api.delete(`/stickers/${id}`),
 };
 
+export const chatBotService = {
+    chat: (data) => api.post('/chatbot', data),
+};
+
 export default api;
