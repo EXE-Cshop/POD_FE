@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { baseProductService, productVariantService } from '../services/api';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { baseProductService, productVariantService, cartService } from '../services/api';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
 
 const ProductDetails = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { id } = useParams();
     const [selectedColor, setSelectedColor] = useState(null);
     const [selectedSize, setSelectedSize] = useState(null);
@@ -103,11 +104,42 @@ const ProductDetails = () => {
         return product?.imageUrl || DEFAULT_IMAGE;
     }, [selectedVariant, colors, selectedColor, product]);
 
-    const handleAddToCart = () => {
-        setIsAdded(true);
-        setShowToast(true);
-        setTimeout(() => setIsAdded(false), 2000);
-        setTimeout(() => setShowToast(false), 4000);
+    const [cartLoading, setCartLoading] = useState(false);
+    const [cartError, setCartError] = useState(null);
+    const autoAddTriggered = React.useRef(false);
+
+    useEffect(() => {
+        if (location.state?.autoAddToCart && !loading && selectedVariant && !autoAddTriggered.current) {
+            autoAddTriggered.current = true;
+            handleAddToCart();
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [loading, selectedVariant, location.state]);
+
+    const handleAddToCart = async () => {
+        if (!selectedVariant) {
+            setCartError('Vui lòng chọn màu sắc và kích cỡ.');
+            return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) {
+            navigate('/home/login', { state: { from: `/home/product/${id}` } });
+            return;
+        }
+        setCartLoading(true);
+        setCartError(null);
+        try {
+            await cartService.addItem(selectedVariant.id, quantity);
+            setIsAdded(true);
+            setShowToast(true);
+            setTimeout(() => setIsAdded(false), 2000);
+            setTimeout(() => setShowToast(false), 4000);
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Không thể thêm vào giỏ hàng. Vui lòng thử lại.';
+            setCartError(msg);
+        } finally {
+            setCartLoading(false);
+        }
     };
 
     const formatPrice = (price) => {
@@ -284,18 +316,25 @@ const ProductDetails = () => {
                         </div>
                         <button
                             onClick={handleAddToCart}
-                            disabled={isAdded || (selectedVariant && selectedVariant.stockQuantity <= 0)}
+                            disabled={isAdded || cartLoading || !selectedVariant || selectedVariant.stockQuantity <= 0}
                             className={`flex-1 h-14 rounded-lg font-bold text-lg transition-all duration-300 flex items-center justify-center gap-2 ${isAdded
                                 ? 'bg-primary text-[#11221c] shadow-[0_0_20px_rgba(20,200,100,0.3)]'
-                                : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl'
+                                : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed'
                                 }`}
                         >
-                            <span className="material-symbols-outlined text-[20px]">
-                                {isAdded ? 'check_circle' : 'shopping_cart'}
-                            </span>
-                            {isAdded ? 'Đã thêm vào giỏ!' : 'Thêm vào giỏ hàng'}
+                            {cartLoading ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                <span className="material-symbols-outlined text-[20px]">
+                                    {isAdded ? 'check_circle' : 'shopping_cart'}
+                                </span>
+                            )}
+                            {cartLoading ? 'Đang thêm...' : isAdded ? 'Đã thêm vào giỏ!' : 'Thêm vào giỏ hàng'}
                         </button>
                     </div>
+                    {cartError && (
+                        <p className="text-red-500 text-sm font-medium -mt-4 mb-4">{cartError}</p>
+                    )}
 
                     {/* Alternative CTA */}
                     <div className="relative flex items-center justify-center w-full my-4">

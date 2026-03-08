@@ -1,6 +1,10 @@
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8080/api/v1';
+/** Backend origin for normalizing relative image URLs (e.g. sticker/upload links) */
+export const API_ORIGIN = (() => {
+  try { return new URL(API_BASE_URL).origin; } catch { return window?.location?.origin || 'http://localhost:8080'; }
+})();
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -8,6 +12,17 @@ const api = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+/** Upload image file - returns url string for preview */
+export const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': undefined },
+    });
+    const data = res.data;
+    return typeof data === 'object' && data?.url ? data.url : data;
+};
 
 // Add a request interceptor to add the token to the header
 api.interceptors.request.use(
@@ -55,8 +70,40 @@ export const stickerService = {
     getAll: () => api.get('/stickers'),
     getById: (id) => api.get(`/stickers/${id}`),
     create: (data) => api.post('/stickers', data),
+    /** Upload file lên Cloudinary và tạo sticker trong kho */
+    upload: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post('/stickers/upload', formData, {
+            headers: { 'Content-Type': undefined },
+        });
+    },
     update: (id, data) => api.put(`/stickers/${id}`, data),
     delete: (id) => api.delete(`/stickers/${id}`),
+};
+
+export const designProductService = {
+    getPublic: () => api.get('/design-products/public'),
+    getMyDesigns: () => api.get('/design-products/my'),
+    getById: (id) => api.get(`/design-products/${id}`),
+    create: (data) => api.post('/design-products', data),
+    update: (id, data) => api.put(`/design-products/${id}`, data),
+    setPublic: (id, value) => api.patch(`/design-products/${id}/public`, null, { params: { value } }),
+    delete: (id) => api.delete(`/design-products/${id}`),
+};
+
+export const cartService = {
+    get: () => api.get('/cart'),
+    addItem: (productVariantId, quantity, { frontPrintUrl, backPrintUrl, customName } = {}) =>
+        api.post('/cart/items', {
+            productVariantId,
+            quantity,
+            frontPrintUrl: frontPrintUrl || undefined,
+            backPrintUrl: backPrintUrl || undefined,
+            customName: customName || undefined,
+        }),
+    updateItem: (itemId, quantity) => api.put(`/cart/items/${itemId}`, { quantity }),
+    removeItem: (itemId) => api.delete(`/cart/items/${itemId}`),
 };
 
 export const chatBotService = {

@@ -23,6 +23,7 @@ import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
 import VirtualTryOn from './pages/VirtualTryOn';
 import Upload from './pages/Upload';
+import CommunityDesigns from './pages/CommunityDesigns';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -55,6 +56,7 @@ function App() {
           <Route path="profile" element={<UserProfile />} />
           <Route path="virtual-try-on" element={<VirtualTryOn />} />
           <Route path="upload" element={<Upload />} />
+          <Route path="community-designs" element={<CommunityDesigns />} />
         </Route>
 
         {/* Customer Auth Routes */}
@@ -62,7 +64,6 @@ function App() {
           <Route path="login" element={<UserLogin />} />
           <Route path="register" element={<UserRegister />} />
         </Route>
-        <Route path="stickers" element={<AdminStickers />} />
         {/* Admin routes protected by ProtectedRoute */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
@@ -70,6 +71,7 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<UserDirectory />} />
             <Route path="orders" element={<PrintQueue />} />
+            <Route path="stickers" element={<AdminStickers />} />
             <Route path="base-products" element={<Inventory />} />
             <Route path="print-areas" element={<PrintAreas />} />
             {/* <Route path="stickers" element={<AdminStickers />} /> */}

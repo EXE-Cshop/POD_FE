@@ -65,6 +65,24 @@ const Cart = () => {
         }
     };
 
+    const updateSize = async (itemId, newSize, currentQuantity) => {
+        setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/cart/items/${itemId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ quantity: currentQuantity, size: newSize }),
+            });
+            if (!response.ok) throw new Error('Failed to update size');
+            const result = await response.json();
+            setCartItems(result.data?.items || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
+        }
+    };
+
     const removeItem = async (itemId) => {
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
@@ -153,13 +171,36 @@ const Cart = () => {
                             {/* Product Info */}
                             <div className="col-span-1 md:col-span-6 flex gap-6 items-start">
                                 <div className="w-24 h-32 md:w-32 md:h-40 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-[40px] text-slate-300">checkroom</span>
+                                    {item.imageUrl ? (
+                                        <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="material-symbols-outlined text-[40px] text-slate-300">checkroom</span>
+                                    )}
                                 </div>
                                 <div className="flex flex-col">
                                     <h3 className="text-lg font-bold text-slate-900 mb-1">
                                         {item.productName}
                                     </h3>
-                                    <p className="text-sm text-slate-500 mb-4">Color: <span className="text-slate-900 font-medium">{item.colorName}</span> | Size: <span className="text-slate-900 font-medium">{item.size}</span></p>
+                                    <div className="text-sm text-slate-500 mb-4 flex items-center gap-2 flex-wrap">
+                                        <span>Màu: <span className="text-slate-900 font-medium">{item.colorName}</span></span>
+                                        <span>|</span>
+                                        <span className="flex items-center gap-1">
+                                            Size:
+                                            {item.availableSizes && item.availableSizes.length > 1 ? (
+                                                <select
+                                                    value={item.size}
+                                                    onChange={(e) => updateSize(item.id, e.target.value, item.quantity)}
+                                                    className="border border-slate-200 rounded-md px-2 py-1 text-sm font-bold text-slate-900 bg-white cursor-pointer hover:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                                >
+                                                    {item.availableSizes.map(s => (
+                                                        <option key={s} value={s}>{s}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <span className="text-slate-900 font-medium">{item.size}</span>
+                                            )}
+                                        </span>
+                                    </div>
 
                                     <div className="mt-auto hidden md:block">
                                         <button
