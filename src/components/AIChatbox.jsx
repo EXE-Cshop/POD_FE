@@ -1,168 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-
-const AI_RESPONSES = {
-    size: {
-        keywords: ['size', 'kích thước', 'cỡ', 'vừa', 'fit', 'sizing', 'bảng size'],
-        reply: "📏 Đây là hướng dẫn chọn size:\n\n• **S**: Ngực 86-90cm, Cao 155-165cm\n• **M**: Ngực 90-96cm, Cao 160-170cm\n• **L**: Ngực 96-102cm, Cao 165-175cm\n• **XL**: Ngực 102-108cm, Cao 170-180cm\n• **2XL**: Ngực 108-114cm, Cao 175-185cm\n\nBạn nặng bao nhiêu kg và cao bao nhiêu? Mình sẽ tư vấn size phù hợp nhất! 😊"
-    },
-    style: {
-        keywords: ['kiểu', 'style', 'mẫu', 'đẹp', 'hợp', 'phối', 'phù hợp', 'nên mặc', 'gợi ý', 'recommend'],
-        reply: "👕 Gợi ý phối đồ theo dáng người:\n\n• **Dáng gầy**: Áo oversize/relaxed fit, tạo cảm giác đầy đặn hơn\n• **Dáng cân đối**: Regular fit hoặc Slim fit đều hợp\n• **Dáng đầy đặn**: Áo regular fit, tránh quá ôm sát\n\n🎨 Màu yêu thích của bạn là gì? Mình sẽ gợi ý thiết kế phù hợp!"
-    },
-    shipping: {
-        keywords: ['ship', 'giao', 'delivery', 'vận chuyển', 'bao lâu', 'ngày'],
-        reply: "🚚 Thông tin giao hàng:\n\n• **Nội thành**: 1-2 ngày làm việc\n• **Ngoại thành**: 3-5 ngày làm việc\n• **Miễn phí ship** cho đơn từ 500K\n\nBạn cần biết thêm gì không? 😊"
-    },
-    order: {
-        keywords: ['đơn hàng', 'order', 'tracking', 'theo dõi', 'trạng thái'],
-        reply: "📦 Để kiểm tra đơn hàng, bạn vào mục **My Orders** trên thanh navigation nhé!\n\nNếu cần hỗ trợ thêm về đơn hàng, bạn cho mình mã đơn hàng nhé! 🔍"
-    },
-    design: {
-        keywords: ['thiết kế', 'design', 'custom', 'tùy chỉnh', 'in', 'print'],
-        reply: "🎨 Bạn có thể tự thiết kế áo tại **Design Editor**!\n\n1. Chọn sản phẩm từ Catalog\n2. Nhấn \"Customize This Product\"\n3. Upload hình, thêm text, chọn màu\n4. Nhấn **Try On** để xem trước trên người bạn!\n\nBắt đầu thiết kế ngay nhé? 🚀"
-    },
-    tryon: {
-        keywords: ['thử', 'try on', 'try-on', 'virtual', 'thử đồ', 'mặc thử'],
-        reply: "👗 Tính năng **Virtual Try-On** cho phép bạn:\n\n1. Thiết kế áo ở Design Editor\n2. Nhấn nút \"Try On\" để chụp thiết kế\n3. Upload ảnh cá nhân\n4. Xem áo đã thiết kế trên người bạn!\n\nHãy thử ngay tại trang Virtual Try-On nhé! ✨"
-    },
-    greeting: {
-        keywords: ['hi', 'hello', 'xin chào', 'chào', 'hey', 'alo'],
-        reply: "Xin chào! 👋 Mình là trợ lý AI của **POD Print**.\n\nMình có thể giúp bạn:\n• 📏 Tư vấn chọn size phù hợp\n• 👕 Gợi ý kiểu áo hợp dáng\n• 🎨 Hướng dẫn thiết kế\n• 🚚 Thông tin giao hàng\n\nBạn cần hỗ trợ gì nhé?"
-    }
-};
-
-const SIZE_CHART = [
-    { size: 'S', minWeight: 40, maxWeight: 55, minHeight: 155, maxHeight: 165, chest: '86-90cm' },
-    { size: 'M', minWeight: 55, maxWeight: 65, minHeight: 160, maxHeight: 170, chest: '90-96cm' },
-    { size: 'L', minWeight: 63, maxWeight: 75, minHeight: 165, maxHeight: 175, chest: '96-102cm' },
-    { size: 'XL', minWeight: 73, maxWeight: 85, minHeight: 170, maxHeight: 180, chest: '102-108cm' },
-    { size: '2XL', minWeight: 83, maxWeight: 100, minHeight: 175, maxHeight: 190, chest: '108-114cm' },
-];
-
-function parseMeasurements(message) {
-    const lower = message.toLowerCase().replace(/,/g, '.').replace(/\s+/g, ' ');
-
-    let weight = null;
-    let height = null;
-
-    // Pattern: "65kg" or "65 kg" or "nặng 65" or "cân nặng 65"
-    const weightPatterns = [
-        /(\d{2,3})\s*kg/i,
-        /nặng\s*[:.]?\s*(\d{2,3})/i,
-        /cân\s*(?:nặng)?\s*[:.]?\s*(\d{2,3})/i,
-        /weight\s*[:.]?\s*(\d{2,3})/i,
-    ];
-
-    // Pattern: "170cm" or "170 cm" or "cao 170" or "chiều cao 170" or "1m70" or "1.70m"
-    const heightPatterns = [
-        /(\d{2,3})\s*cm/i,
-        /cao\s*[:.]?\s*(\d{2,3})/i,
-        /chiều\s*cao\s*[:.]?\s*(\d{2,3})/i,
-        /height\s*[:.]?\s*(\d{2,3})/i,
-        /(\d)[.,](\d{1,2})\s*m(?:et|ét)?/i,  // 1.70m, 1,70m
-        /(\d)\s*m\s*(\d{1,2})/i,              // 1m70
-    ];
-
-    for (const pattern of weightPatterns) {
-        const match = lower.match(pattern);
-        if (match) {
-            weight = parseInt(match[1]);
-            break;
-        }
-    }
-
-    for (const pattern of heightPatterns) {
-        const match = lower.match(pattern);
-        if (match) {
-            if (match[2] !== undefined) {
-                // Format like 1m70 or 1.70m
-                const meters = parseInt(match[1]);
-                const decimals = match[2].length === 1 ? parseInt(match[2]) * 10 : parseInt(match[2]);
-                height = meters * 100 + decimals;
-            } else {
-                height = parseInt(match[1]);
-                // If height < 100, might be in meters like "170" is fine, but "1" alone needs *100
-                if (height < 10) height = height * 100;
-            }
-            break;
-        }
-    }
-
-    // Try to find two standalone numbers if we still don't have both
-    if (weight === null || height === null) {
-        const numbers = lower.match(/\b(\d{2,3})\b/g);
-        if (numbers) {
-            const nums = numbers.map(Number);
-            for (const n of nums) {
-                if (n >= 130 && n <= 200 && height === null) {
-                    height = n;
-                } else if (n >= 30 && n <= 120 && weight === null) {
-                    weight = n;
-                }
-            }
-        }
-    }
-
-    if (weight !== null && (weight < 30 || weight > 150)) weight = null;
-    if (height !== null && (height < 130 || height > 210)) height = null;
-
-    return { weight, height };
-}
-
-function recommendSize(weight, height) {
-    let bestSize = null;
-    let bestScore = -Infinity;
-
-    for (const s of SIZE_CHART) {
-        let score = 0;
-
-        if (weight !== null) {
-            if (weight >= s.minWeight && weight <= s.maxWeight) {
-                score += 2;
-            } else {
-                const distW = Math.min(Math.abs(weight - s.minWeight), Math.abs(weight - s.maxWeight));
-                score -= distW * 0.1;
-            }
-        }
-
-        if (height !== null) {
-            if (height >= s.minHeight && height <= s.maxHeight) {
-                score += 2;
-            } else {
-                const distH = Math.min(Math.abs(height - s.minHeight), Math.abs(height - s.maxHeight));
-                score -= distH * 0.1;
-            }
-        }
-
-        if (score > bestScore) {
-            bestScore = score;
-            bestSize = s;
-        }
-    }
-
-    return bestSize;
-}
-
-function getSizeReply(weight, height) {
-    const rec = recommendSize(weight, height);
-    if (!rec) return null;
-
-    let intro = '';
-    if (weight !== null && height !== null) {
-        intro = `Với chiều cao **${height}cm** và cân nặng **${weight}kg**`;
-    } else if (height !== null) {
-        intro = `Với chiều cao **${height}cm**`;
-    } else if (weight !== null) {
-        intro = `Với cân nặng **${weight}kg**`;
-    }
-
-    const fitNote = weight !== null && height !== null
-        ? (weight > rec.maxWeight ? '\n\n💡 *Nếu bạn thích mặc thoải mái hơn, có thể chọn lên 1 size nhé!*' :
-            weight < rec.minWeight ? '\n\n💡 *Nếu bạn thích áo ôm hơn, có thể chọn xuống 1 size nhé!*' : '')
-        : '';
-
-    return `${intro}, mình đề xuất bạn chọn size **${rec.size}** nhé! 👕\n\n📐 **Thông số size ${rec.size}:**\n• Số đo ngực: ${rec.chest}\n• Chiều cao phù hợp: ${rec.minHeight}-${rec.maxHeight}cm\n• Cân nặng phù hợp: ${rec.minWeight}-${rec.maxWeight}kg${fitNote}\n\n✅ Size **${rec.size}** sẽ vừa vặn và thoải mái nhất cho bạn!\n\nBạn có muốn biết thêm về cách phối đồ hoặc chọn kiểu áo không? 😊`;
-}
+import { chatBotService } from '../services/api';
 
 const QUICK_ACTIONS = [
     { label: '📏 Tư vấn Size', keyword: 'size' },
@@ -171,27 +8,6 @@ const QUICK_ACTIONS = [
     { label: '👗 Thử đồ ảo', keyword: 'tryon' },
     { label: '🚚 Giao hàng', keyword: 'shipping' },
 ];
-
-function getAIReply(message) {
-    const lower = message.toLowerCase();
-
-    // Check for body measurements first (weight/height)
-    const { weight, height } = parseMeasurements(message);
-    if (weight !== null || height !== null) {
-        const sizeReply = getSizeReply(weight, height);
-        if (sizeReply) return sizeReply;
-    }
-
-    // Then check keyword-based responses
-    for (const [, data] of Object.entries(AI_RESPONSES)) {
-        for (const kw of data.keywords) {
-            if (lower.includes(kw)) {
-                return data.reply;
-            }
-        }
-    }
-    return "Cảm ơn bạn đã nhắn! 😊 Mình có thể hỗ trợ bạn về:\n• Tư vấn size & style\n• Hướng dẫn thiết kế\n• Thử đồ ảo\n• Thông tin giao hàng & đơn hàng\n\nBạn quan tâm chủ đề nào nhé?";
-}
 
 const AIChatbox = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -220,30 +36,74 @@ const AIChatbox = () => {
         }
     }, [isOpen]);
 
-    const sendMessage = (text) => {
-        if (!text.trim()) return;
+    // Use ref to keep track of latest messages for sendMessage closure
+    const messagesRef = useRef(messages);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
+
+    // Global event listener to open chatbox from anywhere (e.g. Design Editor)
+    useEffect(() => {
+        const handleOpenChatbox = (e) => {
+            setIsOpen(true);
+            if (e.detail?.message || e.detail?.image) {
+                // Small delay to ensure UI is ready
+                setTimeout(() => {
+                    sendMessage(e.detail.message || '', e.detail.image);
+                }, 100);
+            }
+        };
+        window.addEventListener('openChatbox', handleOpenChatbox);
+        return () => window.removeEventListener('openChatbox', handleOpenChatbox);
+    }, []);
+
+    const sendMessage = async (text, imageBase64 = null) => {
+        if (!text.trim() && !imageBase64) return;
 
         const userMsg = {
             id: Date.now(),
             sender: 'user',
             text: text.trim(),
+            image: imageBase64,
             time: new Date()
         };
         setMessages(prev => [...prev, userMsg]);
         setInputValue('');
         setIsTyping(true);
 
-        setTimeout(() => {
-            const reply = getAIReply(text);
+        try {
+            // Build history strictly matching ChatRequest format expected by backend
+            const history = messagesRef.current.map(msg => ({
+                role: msg.sender === 'bot' ? 'assistant' : 'user',
+                content: msg.text
+            }));
+
+            const response = await chatBotService.chat({
+                message: text.trim(),
+                history: history,
+                image: imageBase64
+            });
+
+            const reply = response.data?.reply || response.data?.data?.reply || "Xin lỗi, mình không thể giải đáp được câu hỏi này. 😢";
+
             setMessages(prev => [...prev, {
                 id: Date.now() + 1,
                 sender: 'bot',
                 text: reply,
                 time: new Date()
             }]);
+        } catch (error) {
+            console.error("Chatbot API Error:", error);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                sender: 'bot',
+                text: "Xin lỗi, hệ thống đang gặp sự cố kết nối. Vui lòng thử lại sau nhé! 🛠️",
+                time: new Date()
+            }]);
+        } finally {
             setIsTyping(false);
             if (!isOpen) setHasUnread(true);
-        }, 800 + Math.random() * 1200);
+        }
     };
 
     const handleSubmit = (e) => {
@@ -337,7 +197,12 @@ const AIChatbox = () => {
                                 }`}
                                 style={msg.sender === 'bot' ? { background: 'rgba(255,255,255,0.06)' } : {}}
                             >
-                                {formatMessage(msg.text)}
+                                {msg.image && (
+                                    <div className="mb-2">
+                                        <img src={msg.image} alt="Attached image" className="max-w-full rounded border border-white/20 shadow-sm" style={{ maxHeight: '160px', objectFit: 'contain' }} />
+                                    </div>
+                                )}
+                                {msg.text && formatMessage(msg.text)}
                             </div>
                         </div>
                     ))}

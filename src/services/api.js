@@ -92,4 +92,9 @@ export const designProductService = {
     delete: (id) => api.delete(`/design-products/${id}`),
 };
 
+export const chatBotService = {
+    chat: (data) => api.post('/chatbot', data),
+};
+
+
 export default api;

@@ -1110,6 +1110,34 @@ const DesignerPage = () => {
     }
   };
 
+  const handleAIReview = () => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    // Temporarily hide the print area bounds and discard active selection before taking a snapshot
+    canvas.discardActiveObject();
+    const printOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
+    if (printOverlay) printOverlay.set('visible', false);
+    canvas.renderAll();
+
+    const dataUrl = canvas.toDataURL({
+      format: 'png',
+      quality: 0.8,
+    });
+
+    // Restore print area bounds
+    if (printOverlay) printOverlay.set('visible', true);
+    canvas.renderAll();
+
+    const event = new CustomEvent('openChatbox', {
+      detail: {
+        message: 'Bạn hãy nhận xét xem thiết kế này của tôi đã đẹp và hợp lý chưa nhé!',
+        image: dataUrl
+      }
+    });
+    window.dispatchEvent(event);
+  };
+
   const updateSelectedProp = (prop, value) => {
     const canvas = fabricRef.current;
     if (!canvas || !selectedObj?.ref) return;
@@ -1296,6 +1324,14 @@ const DesignerPage = () => {
             >
               <span className="material-symbols-outlined text-base">checkroom</span>
               <span>Try On</span>
+            </button>
+            <button
+              onClick={handleAIReview}
+              className="hidden sm:flex min-w-[110px] items-center justify-center rounded-lg h-9 px-4 bg-[#11221c] border border-[#11221c] text-sm font-bold text-white hover:bg-slate-800 transition-all gap-2 shadow-sm"
+              title="Nhờ AI nhận xét thiết kế"
+            >
+              <span className="material-symbols-outlined text-base text-primary">auto_awesome</span>
+              <span>Ask AI Review</span>
             </button>
             {renderError && (
               <p className="text-xs text-red-500 font-medium max-w-[200px] truncate" title={renderError}>{renderError}</p>
