@@ -92,9 +92,22 @@ export const designProductService = {
     delete: (id) => api.delete(`/design-products/${id}`),
 };
 
+export const cartService = {
+    get: () => api.get('/cart'),
+    addItem: (productVariantId, quantity, { frontPrintUrl, backPrintUrl, customName } = {}) =>
+        api.post('/cart/items', {
+            productVariantId,
+            quantity,
+            frontPrintUrl: frontPrintUrl || undefined,
+            backPrintUrl: backPrintUrl || undefined,
+            customName: customName || undefined,
+        }),
+    updateItem: (itemId, quantity) => api.put(`/cart/items/${itemId}`, { quantity }),
+    removeItem: (itemId) => api.delete(`/cart/items/${itemId}`),
+};
+
 export const chatBotService = {
     chat: (data) => api.post('/chatbot', data),
 };
-
 
 export default api;

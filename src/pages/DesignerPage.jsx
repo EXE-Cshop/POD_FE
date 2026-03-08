@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import * as fabric from 'fabric';
-import { baseProductService, productVariantService, renderService, stickerService, designProductService, uploadImage, API_ORIGIN } from '../services/api';
+import { baseProductService, productVariantService, renderService, stickerService, designProductService, uploadImage, cartService, API_ORIGIN } from '../services/api';
 import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
 
 const CANVAS_WIDTH = 800;
@@ -873,9 +873,10 @@ const DesignerPage = () => {
     return fabricObjs.map((obj, idx) => {
       const left = toNum(obj.left, 0);
       const top = toNum(obj.top, 0);
-      const w = obj.getScaledWidth?.() ?? toNum(obj.width, 1) * toNum(obj.scaleX, 1);
-      const h = obj.getScaledHeight?.() ?? toNum(obj.height, 1) * toNum(obj.scaleY, 1);
-      // Fabric uses center origin by default; backend expects top-left
+      const scaleX = toNum(obj.scaleX, 1);
+      const scaleY = toNum(obj.scaleY, 1);
+      const w = obj.getScaledWidth?.() ?? toNum(obj.width, 1) * scaleX;
+      const h = obj.getScaledHeight?.() ?? toNum(obj.height, 1) * scaleY;
       const ox = obj.originX || 'center';
       const oy = obj.originY || 'center';
       let px = left;
@@ -904,9 +905,18 @@ const DesignerPage = () => {
           fontFamily: obj.fontFamily ?? 'Arial',
           fontSize: toNum(obj.fontSize, 24),
           fontColor: obj.fill ?? '#000000',
+          fontWeight: obj.fontWeight || 'normal',
+          fontStyle: obj.fontStyle || 'normal',
+          textAlign: obj.textAlign || 'left',
+          scaleX,
+          scaleY,
+          textBoxWidthCanvasPx: toNum(obj.width, 100),
         };
       }
-      let url = obj.getSrc?.() || obj.src || '';
+      let url = obj.getSrc?.() || obj.src || obj._element?.src || '';
+      if (!url) {
+        try { url = obj.toDataURL?.({ format: 'png' }) || ''; } catch (_) { /* ignore */ }
+      }
       if (url && !url.startsWith('http') && !url.startsWith('data:')) {
         url = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
       }
@@ -979,33 +989,46 @@ const DesignerPage = () => {
       return;
     }
 
-    const basePrice = product?.basePrice != null ? Number(product.basePrice) : BASE_PRICE;
-    const pricePerUnit = basePrice / 25000;
-    const productTitle = product?.name ? `${product.name} - Custom Design` : 'Classic Tee - Custom Design';
-    const pid = product?.id ?? productId ?? 170;
-
-    const cartItem = {
-      id: Date.now(),
-      productId: Number(pid),
-      title: productTitle,
-      color: activeColor === 'white' ? 'White' : 'Black',
-      size: selectedSize,
-      quantity,
-      price: pricePerUnit,
-      image: tshirtImages[activeColor],
-      isCustomDesign: true,
-      frontPrintUrl: frontPrintUrl || undefined,
-      backPrintUrl: backPrintUrl || undefined,
-      designPayload: {
-        frontDesign: frontSerialized,
-        backDesign: backSerialized,
-        canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
-        printArea: { left: PRINT_AREA_LEFT, top: PRINT_AREA_TOP, width: PRINT_AREA_WIDTH, height: PRINT_AREA_HEIGHT },
-        garmentColor: activeColor,
-      },
+    const colorKeywords = activeColor === 'white'
+      ? ['trắng', 'trang', 'white']
+      : ['đen', 'den', 'black'];
+    const matchColor = (v) => {
+      const cName = (v.colorName || v.color_name || '').toLowerCase();
+      return colorKeywords.some((kw) => cName.includes(kw));
     };
+    const matchSize = (v) => (v.size || '').toUpperCase() === selectedSize.toUpperCase();
 
-    navigate('/home/cart', { state: { newDesignItem: cartItem } });
+    let matchedVariant = variants.find((v) => matchColor(v) && matchSize(v))
+      || variants.find((v) => matchColor(v))
+      || variants.find((v) => matchSize(v))
+      || (variants.length > 0 ? variants[0] : null);
+
+    if (!matchedVariant) {
+      setRenderError('Sản phẩm chưa có phân loại (variant). Vui lòng liên hệ admin.');
+      return;
+    }
+    console.log('Matched variant:', matchedVariant, 'from', variants.length, 'variants');
+
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    if (!token) {
+      navigate('/home/login', { state: { from: location.pathname } });
+      return;
+    }
+
+    try {
+      const productName = product?.name ? `${product.name} - Custom Design` : 'Custom Design';
+      await cartService.addItem(matchedVariant.id, quantity, {
+        frontPrintUrl,
+        backPrintUrl,
+        customName: productName,
+      });
+    } catch (err) {
+      console.error('Add to cart failed', err);
+      setRenderError(err.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
+      return;
+    }
+
+    navigate('/home/cart');
     setIsAdded(true);
     setShowToast(true);
     setTimeout(() => setIsAdded(false), 2000);
@@ -1156,11 +1179,22 @@ const DesignerPage = () => {
     syncSelectedProps(obj);
   };
 
-  // ─── Zoom ─────────────────────────────────────────────────────────
+  // ─── Zoom (Fabric native để text sắc nét, không dùng CSS scale) ─────
 
   useEffect(() => {
-    if (zoom === 100) setPanOffset({ x: 0, y: 0 });
+    if (zoom === 100) setPanOffset((p) => (p.x === 0 && p.y === 0 ? p : { x: 0, y: 0 }));
   }, [zoom]);
+
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    const z = zoom / 100;
+    const w = Math.round(CANVAS_WIDTH * z);
+    const h = Math.round(CANVAS_HEIGHT * z);
+    canvas.setDimensions({ width: w, height: h });
+    canvas.setZoom(z);
+    canvas.requestRenderAll();
+  }, [zoom, panOffset]);
 
   const handleCanvasWheel = useCallback((e) => {
     e.preventDefault();
@@ -1667,10 +1701,9 @@ const DesignerPage = () => {
             <div
               className="rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
               style={{
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT,
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom / 100})`,
-                transformOrigin: 'center center',
+                width: Math.round(CANVAS_WIDTH * zoom / 100),
+                height: Math.round(CANVAS_HEIGHT * zoom / 100),
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px)`,
                 willChange: 'transform',
                 backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
                 backgroundSize: '20px 20px',

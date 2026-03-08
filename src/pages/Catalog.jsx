@@ -131,13 +131,23 @@ const Catalog = () => {
                                         <p className="text-slate-500 text-sm mb-3 line-clamp-2">{product.description}</p>
                                     )}
                                     <span className="text-primary text-xl font-black mb-4">{formatPrice(product.basePrice)}</span>
-                                    <button
-                                        onClick={() => navigate(`/design/${product.id}`)}
-                                        className="w-full mt-auto flex items-center justify-center gap-2 rounded-lg h-11 bg-slate-100 text-slate-900 text-sm font-bold hover:bg-primary hover:text-[#11221c] transition-colors"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">palette</span>
-                                        Design Now
-                                    </button>
+                                    <div className="mt-auto flex flex-col gap-2">
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => navigate(`/design/${product.id}`)}
+                                                className="flex-[3] flex items-center justify-center gap-2 rounded-lg h-11 bg-slate-100 text-slate-900 text-sm font-bold hover:bg-primary hover:text-[#11221c] transition-colors"
+                                            >
+                                                Tuỳ chỉnh thiết kế
+                                            </button>
+                                            <button
+                                                onClick={() => navigate(`/home/product/${product.id}`, { state: { autoAddToCart: true } })}
+                                                className="flex-[1] flex items-center justify-center rounded-lg h-11 bg-primary text-[#11221c] hover:brightness-110 transition-all"
+                                                title="Thêm vào giỏ hàng"
+                                            >
+                                                <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         ))}

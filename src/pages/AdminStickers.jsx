@@ -12,6 +12,8 @@ const AdminStickers = () => {
   const [editingId, setEditingId] = useState(null);
   const [editLabel, setEditLabel] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
   const fileInputRef = useRef(null);
 
   const fetchStickers = async () => {
@@ -62,12 +64,17 @@ const AdminStickers = () => {
   };
 
   const handleDelete = async (id) => {
+    setDeletingId(id);
+    setDeleteError(null);
     try {
       await stickerService.delete(id);
+      setStickers((prev) => prev.filter((s) => s.id !== id));
       setDeleteConfirmId(null);
-      fetchStickers();
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Không thể xóa.');
+      const msg = err.response?.data?.message || err.message || 'Không thể xóa.';
+      setDeleteError(msg);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -125,6 +132,12 @@ const AdminStickers = () => {
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <div className="px-6 py-4 border-b border-slate-200">
             <h2 className="text-lg font-bold text-slate-900">Kho sticker ({stickers.length})</h2>
+            {deleteError && (
+              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-4 py-2 rounded-lg mt-3">
+                <span>{deleteError}</span>
+                <button onClick={() => setDeleteError(null)} className="p-1 hover:bg-red-100 rounded">×</button>
+              </div>
+            )}
           </div>
           {loading ? (
             <div className="p-12 flex items-center justify-center">
@@ -179,9 +192,21 @@ const AdminStickers = () => {
                               <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
                             {deleteConfirmId === s.id ? (
-                              <span className="inline-flex gap-2 ml-2">
-                                <button onClick={() => handleDelete(s.id)} className="text-red-600 text-sm font-bold">Xóa</button>
-                                <button onClick={() => setDeleteConfirmId(null)} className="text-slate-500 text-sm">Hủy</button>
+                              <span className="inline-flex gap-2 ml-2 items-center">
+                                <button
+                                  onClick={() => handleDelete(s.id)}
+                                  disabled={deletingId === s.id}
+                                  className="text-red-600 text-sm font-bold hover:underline disabled:opacity-50"
+                                >
+                                  {deletingId === s.id ? 'Đang xóa...' : 'Xóa'}
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  disabled={deletingId === s.id}
+                                  className="text-slate-500 text-sm hover:underline disabled:opacity-50"
+                                >
+                                  Hủy
+                                </button>
                               </span>
                             ) : (
                               <button onClick={() => setDeleteConfirmId(s.id)} className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg ml-1" title="Xóa">

@@ -1,18 +1,36 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import api from '../services/api';
 
 const UserLogin = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
+        setError('');
+        const formData = new FormData(e.target);
+        const email = formData.get('username');
+        const password = formData.get('password');
+        try {
+            const res = await api.post('/auth/login', { email, password });
+            const { accessToken, refreshToken } = res.data?.data || res.data || {};
+            if (accessToken) {
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('token', accessToken);
+                localStorage.setItem('refreshToken', refreshToken || '');
+            }
+            const from = location.state?.from || '/home';
+            navigate(from, { replace: true });
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
+            setError(msg);
+        } finally {
             setIsLoading(false);
-            navigate('/home/profile');
-        }, 1000);
+        }
     };
 
     return (
@@ -28,6 +46,9 @@ const UserLogin = () => {
             </div>
 
             <form className="space-y-6" onSubmit={handleSubmit}>
+                {error && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium">{error}</div>
+                )}
                 <div>
                     <label htmlFor="username" className="block text-sm font-medium leading-6 text-slate-900">
                         Username or Email

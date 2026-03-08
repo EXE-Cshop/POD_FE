@@ -1,18 +1,41 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 const UserRegister = () => {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+        const formData = new FormData(e.target);
+        const fullName = formData.get('name');
+        const email = formData.get('email');
+        const password = formData.get('password');
+        const confirmPassword = formData.get('confirmPassword');
+
+        if (password !== confirmPassword) {
+            setError('Mật khẩu xác nhận không khớp.');
+            return;
+        }
         setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
+        try {
+            const res = await api.post('/auth/register', { email, password, fullName });
+            const { accessToken, refreshToken } = res.data?.data || res.data || {};
+            if (accessToken) {
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('token', accessToken);
+                localStorage.setItem('refreshToken', refreshToken || '');
+            }
+            navigate('/home', { replace: true });
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.';
+            setError(msg);
+        } finally {
             setIsLoading(false);
-            navigate('/home/profile'); // Auto-login after registration
-        }, 1000);
+        }
     };
 
     return (
@@ -28,6 +51,9 @@ const UserRegister = () => {
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit}>
+                {error && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium">{error}</div>
+                )}
                 <div>
                     <label htmlFor="name" className="block text-sm font-medium leading-6 text-slate-900">
                         Full Name

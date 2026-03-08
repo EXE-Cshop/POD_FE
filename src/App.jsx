@@ -64,7 +64,6 @@ function App() {
           <Route path="login" element={<UserLogin />} />
           <Route path="register" element={<UserRegister />} />
         </Route>
-        <Route path="stickers" element={<AdminStickers />} />
         {/* Admin routes protected by ProtectedRoute */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
@@ -72,6 +71,7 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<UserDirectory />} />
             <Route path="orders" element={<PrintQueue />} />
+            <Route path="stickers" element={<AdminStickers />} />
             <Route path="base-products" element={<Inventory />} />
             <Route path="print-areas" element={<PrintAreas />} />
             {/* <Route path="stickers" element={<AdminStickers />} /> */}

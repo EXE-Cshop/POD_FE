@@ -63,6 +63,12 @@ export function serializedToRenderLayers(objs) {
         fontFamily: obj.fontFamily ?? 'Arial',
         fontSize: toNum(obj.fontSize, 24),
         fontColor: obj.fill ?? '#000000',
+        fontWeight: obj.fontWeight || 'normal',
+        fontStyle: obj.fontStyle || 'normal',
+        textAlign: obj.textAlign || 'left',
+        scaleX,
+        scaleY,
+        textBoxWidthCanvasPx: toNum(obj.width ?? obj._originalWidth, 100),
       };
     }
     let url = obj.src || '';
@@ -71,24 +77,6 @@ export function serializedToRenderLayers(objs) {
     }
     return { ...base, url: url || '', opacity: toNum(obj.opacity, 1) };
   });
-}
-
-/** Convert single image URL to data URL (for garment). Same-origin/cors-friendly. */
-export async function ensureDataUrl(url) {
-  if (!url || url.startsWith('data:')) return url;
-  try {
-    const res = await fetch(url, { mode: 'cors' });
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(blob);
-    });
-  } catch (e) {
-    console.warn('Could not convert garment URL to data URL:', url, e);
-    return url;
-  }
 }
 
 /** Check if URL or blob is SVG (SVG not supported in render pipeline). */
@@ -100,7 +88,47 @@ function isSvg(url, blobType) {
   return false;
 }
 
-/** Convert image URLs to data URLs. SVG layers are rejected (use PNG/JPG). */
+/** Convert any image blob to a PNG data URL (handles WebP, AVIF, etc. that Java ImageIO can't read). */
+async function blobToPngDataUrl(blob) {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  bitmap.close?.();
+  return canvas.toDataURL('image/png');
+}
+
+/** Convert single image URL to PNG data URL (for garment). Handles WebP from Cloudinary. */
+export async function ensureDataUrl(url) {
+  if (!url) return url;
+  if (url.startsWith('data:image/png') || url.startsWith('data:image/jpeg')) return url;
+  try {
+    let blob;
+    if (url.startsWith('data:')) {
+      const res = await fetch(url);
+      blob = await res.blob();
+    } else {
+      const res = await fetch(url, { mode: 'cors' });
+      blob = await res.blob();
+    }
+    const isPngOrJpeg = blob.type === 'image/png' || blob.type === 'image/jpeg';
+    if (isPngOrJpeg) {
+      return await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+    }
+    return await blobToPngDataUrl(blob);
+  } catch (e) {
+    console.warn('Could not convert garment URL to data URL:', url, e);
+    return url;
+  }
+}
+
+/** Convert image URLs to data URLs (always PNG). SVG layers are rejected. */
 export async function ensureDataUrlsForLayers(layers) {
   const result = [];
   for (const layer of layers) {
@@ -116,17 +144,29 @@ export async function ensureDataUrlsForLayers(layers) {
       throw new Error('Thiết kế có chứa ảnh SVG không được hỗ trợ. Vui lòng sử dụng PNG hoặc JPG.');
     }
     try {
-      const res = await fetch(layer.url, { mode: 'cors' });
-      const blob = await res.blob();
+      let blob;
+      if (layer.url.startsWith('data:')) {
+        const res = await fetch(layer.url);
+        blob = await res.blob();
+      } else {
+        const res = await fetch(layer.url, { mode: 'cors' });
+        blob = await res.blob();
+      }
       if (isSvg(null, blob.type)) {
         throw new Error('Thiết kế có chứa ảnh SVG không được hỗ trợ. Vui lòng sử dụng PNG hoặc JPG.');
       }
-      const dataUrl = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
+      const isPngOrJpeg = blob.type === 'image/png' || blob.type === 'image/jpeg';
+      let dataUrl;
+      if (isPngOrJpeg) {
+        dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+      } else {
+        dataUrl = await blobToPngDataUrl(blob);
+      }
       result.push({ ...layer, url: dataUrl });
     } catch (e) {
       if (e.message?.includes('SVG')) throw e;
