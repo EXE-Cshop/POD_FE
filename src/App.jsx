@@ -5,7 +5,6 @@ import DashboardLayout from './layouts/DashboardLayout';
 import HomeLayout from './layouts/HomeLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import UserDirectory from './pages/UserDirectory';
-import Login from './pages/Login';
 import PrintQueue from './pages/PrintQueue';
 import Inventory from './pages/Inventory';
 import Roles from './pages/Roles';
@@ -36,13 +35,18 @@ const Placeholder = ({ title }) => (
 import AdminDashboard from './pages/AdminDashboard';
 import AdminStickers from './pages/AdminStickers';
 import SchedulerDashboard from './pages/SchedulerDashboard';
+import Forbidden403 from './pages/Forbidden403';
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<UserLogin />} />
+          <Route path="/register" element={<UserRegister />} />
+        </Route>
+        <Route path="/403" element={<Forbidden403 />} />
         <Route path="/design/:productId" element={<DesignerPage />} />
         <Route path="/design" element={<DesignerPage />} />
 
@@ -61,11 +65,6 @@ function App() {
           <Route path="community-designs" element={<CommunityDesigns />} />
         </Route>
 
-        {/* Customer Auth Routes */}
-        <Route path="/home" element={<AuthLayout />}>
-          <Route path="login" element={<UserLogin />} />
-          <Route path="register" element={<UserRegister />} />
-        </Route>
         {/* Admin routes protected by ProtectedRoute */}
         <Route path="/admin" element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>

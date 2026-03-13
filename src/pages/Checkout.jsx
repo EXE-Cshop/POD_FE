@@ -30,7 +30,7 @@ const Checkout = () => {
                 setCartItems(items);
             } catch (err) {
                 if (err.response?.status === 401 || err.response?.status === 403) {
-                    navigate('/home/login');
+                    navigate('/login', { state: { from: location } });
                 } else {
                     setError(err.message);
                 }
@@ -64,7 +64,7 @@ const Checkout = () => {
             if (orderData) localStorage.setItem('lastOrder', JSON.stringify(orderData));
             navigate('/home/order-success');
         } catch (err) {
-            if (err.response?.status === 401) navigate('/home/login');
+            if (err.response?.status === 401) navigate('/login');
             else setError(err.response?.data?.message || err.message || 'Checkout failed');
         } finally {
             setSubmitting(false);

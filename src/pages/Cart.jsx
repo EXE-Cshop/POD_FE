@@ -1,23 +1,70 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cartService } from '../services/api';
+import { guestCartStorage } from '../utils/guestCartStorage';
+import { useAuth } from '../components/AuthProvider';
+
+const LoginPromptModal = ({ isOpen, onClose, onLogin }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-in fade-in zoom-in duration-300" onClick={(e) => e.stopPropagation()}>
+                <div className="text-center">
+                    <div className="size-20 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span className="material-symbols-outlined text-4xl">account_circle</span>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">Login Required</h3>
+                    <p className="text-slate-500 mb-8">
+                        Please sign in or create an account to proceed with your checkout. 
+                        Your custom designs will be saved to your account automatically.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={onLogin}
+                            className="w-full h-12 bg-primary text-[#11221c] rounded-xl font-bold hover:brightness-105 transition-all shadow-lg"
+                        >
+                            Sign In / Register
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="w-full h-12 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                        >
+                            Continue as Guest
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Cart = () => {
     const navigate = useNavigate();
+    const { user, isAuthenticated } = useAuth();
     const [cartItems, setCartItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [updatingItems, setUpdatingItems] = useState({});
+    const [showLoginModal, setShowLoginModal] = useState(false);
 
     const fetchCart = async () => {
+        setLoading(true);
+        setError(null);
         try {
-            const res = await cartService.get();
-            setCartItems(res.data?.data?.items || res.data?.items || []);
-        } catch (err) {
-            if (err.response?.status === 401 || err.response?.status === 403) {
-                navigate('/home/login');
+            if (isAuthenticated) {
+                const res = await cartService.get();
+                setCartItems(res.data?.data?.items || res.data?.items || []);
             } else {
+                setCartItems(guestCartStorage.getCartItems());
+            }
+        } catch (err) {
+            console.error('Fetch cart failed:', err);
+            // Don't redirect automatically anymore, just show error or empty
+            if (err.response?.status !== 401 && err.response?.status !== 403) {
                 setError(err.message || 'Failed to fetch cart');
+            } else {
+                // If it was a 401 but we think we are authenticated, wait for refresh logic in api.js/AuthProvider
+                setCartItems([]);
             }
         } finally {
             setLoading(false);
@@ -26,14 +73,19 @@ const Cart = () => {
 
     useEffect(() => {
         fetchCart();
-    }, []);
+    }, [isAuthenticated]);
 
     const updateQuantity = async (itemId, newQuantity) => {
         if (newQuantity < 1) return;
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
-            const res = await cartService.updateItem(itemId, { quantity: newQuantity });
-            setCartItems(res.data?.data?.items || res.data?.items || []);
+            if (isAuthenticated) {
+                const res = await cartService.updateItem(itemId, { quantity: newQuantity });
+                setCartItems(res.data?.data?.items || res.data?.items || []);
+            } else {
+                const items = guestCartStorage.updateItem(itemId, { quantity: newQuantity });
+                setCartItems(items);
+            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -44,8 +96,13 @@ const Cart = () => {
     const updateSize = async (itemId, newSize, currentQuantity) => {
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
-            const res = await cartService.updateItem(itemId, { quantity: currentQuantity, size: newSize });
-            setCartItems(res.data?.data?.items || res.data?.items || []);
+            if (isAuthenticated) {
+                const res = await cartService.updateItem(itemId, { quantity: currentQuantity, size: newSize });
+                setCartItems(res.data?.data?.items || res.data?.items || []);
+            } else {
+                const items = guestCartStorage.updateItem(itemId, { size: newSize });
+                setCartItems(items);
+            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -56,8 +113,13 @@ const Cart = () => {
     const removeItem = async (itemId) => {
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
-            const res = await cartService.removeItem(itemId);
-            setCartItems(res.data?.data?.items || res.data?.items || []);
+            if (isAuthenticated) {
+                const res = await cartService.removeItem(itemId);
+                setCartItems(res.data?.data?.items || res.data?.items || []);
+            } else {
+                const items = guestCartStorage.removeItem(itemId);
+                setCartItems(items);
+            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -107,9 +169,7 @@ const Cart = () => {
                 <p className="text-slate-500 mb-8 max-w-md">Looks like you haven't added anything to your cart yet. Let's get you set up with some premium custom gear.</p>
                 <button
                     onClick={() => {
-                        let pid = sessionStorage.getItem('pod_tryon_product_id');
-                        if (!pid) { try { pid = JSON.parse(sessionStorage.getItem('pod_designer_draft') || '{}')?.productId; } catch {} }
-                        navigate(pid ? `/design/${pid}` : '/design');
+                        navigate('/home/catalog');
                     }}
                     className="h-12 px-8 bg-primary text-[#11221c] font-extrabold rounded-lg hover:bg-primary/90 transition-all shadow-md"
                 >
@@ -259,35 +319,47 @@ const Cart = () => {
                             </div>
                             <div className="flex justify-between items-center">
                                 <span>Shipping</span>
-                                {shipping === 0 ? (
-                                    <span className="font-bold text-primary uppercase text-xs tracking-wider bg-primary/10 px-2 py-1 rounded">Free</span>
-                                ) : (
-                                    <span className="font-bold text-slate-900">${shipping.toFixed(2)}</span>
-                                )}
-                            </div>
+                            {shipping === 0 ? (
+                                <span className="font-bold text-primary uppercase text-xs tracking-wider bg-primary/10 px-2 py-1 rounded">Free</span>
+                            ) : (
+                                <span className="font-bold text-slate-900">${shipping.toFixed(2)}</span>
+                            )}
                         </div>
+                    </div>
 
-                        <div className="flex justify-between items-end mb-8">
-                            <span className="text-xl font-bold text-slate-900">Total</span>
-                            <span className="text-4xl font-black text-slate-900">${total.toFixed(2)}</span>
-                        </div>
+                    <div className="flex justify-between items-end mb-8">
+                        <span className="text-xl font-bold text-slate-900">Total</span>
+                        <span className="text-4xl font-black text-slate-900">${total.toFixed(2)}</span>
+                    </div>
 
-                        <button
-                            onClick={() => navigate('/home/checkout')}
-                            className="w-full h-14 bg-slate-900 text-white rounded-lg font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform mb-4 flex items-center justify-center gap-2"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">lock</span>
-                            Proceed to Checkout
-                        </button>
+                    <button
+                        onClick={() => {
+                            if (isAuthenticated) {
+                                navigate('/home/checkout');
+                            } else {
+                                setShowLoginModal(true);
+                            }
+                        }}
+                        className="w-full h-14 bg-slate-900 text-white rounded-lg font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform mb-4 flex items-center justify-center gap-2"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">lock</span>
+                        {isAuthenticated ? 'Proceed to Checkout' : 'Login to Checkout'}
+                    </button>
 
-                        <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
-                            <span className="material-symbols-outlined text-[16px]">verified_user</span>
-                            Secure encrypted checkout
-                        </div>
+                    <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
+                        <span className="material-symbols-outlined text-[16px]">verified_user</span>
+                        Secure encrypted checkout
                     </div>
                 </div>
             </div>
+
+            <LoginPromptModal 
+                isOpen={showLoginModal} 
+                onClose={() => setShowLoginModal(false)}
+                onLogin={() => navigate('/login', { state: { from: '/home/cart' } })}
+            />
         </div>
+    </div>
     );
 };
 

@@ -1,8 +1,9 @@
-import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from './AuthProvider';
 
 const Sidebar = () => {
     const navigate = useNavigate();
+    const { logout } = useAuth();
 
     return (
         <aside className="w-64 flex-shrink-0 bg-white  border-r border-gray-200  hidden md:flex flex-col h-full font-display">
@@ -19,6 +20,14 @@ const Sidebar = () => {
             </div>
 
             <nav className="flex-1 px-3 space-y-1">
+                <Link
+                    to="/home"
+                    className="flex items-center gap-3 px-3 py-3 rounded-lg text-primary hover:bg-primary/10 transition-colors mb-2"
+                >
+                    <span className="material-symbols-outlined">home</span>
+                    <span className="text-sm font-bold uppercase tracking-tight">Go to Home</span>
+                </Link>
+                <div className="border-t border-gray-100 my-2"></div>
                 {[
                     { name: 'Dashboard', icon: 'dashboard', path: '/admin/dashboard' },
                     { name: 'User Directory', icon: 'group', path: '/admin/users' },
@@ -53,10 +62,7 @@ const Sidebar = () => {
                     <p className="text-[10px] text-gray-500  mt-1">Last synced 2m ago</p>
                 </div>
                 <button
-                    onClick={() => {
-                        localStorage.removeItem('isAdminAuthenticated');
-                        navigate('/login');
-                    }}
+                    onClick={logout}
                     className="w-full flex items-center justify-center gap-2 rounded-lg h-10 bg-primary text-[#11221c] text-sm font-bold hover:brightness-110 transition-all"
                 >
                     <span className="material-symbols-outlined text-[18px]">logout</span>

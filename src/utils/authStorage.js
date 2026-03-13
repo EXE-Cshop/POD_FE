@@ -5,24 +5,24 @@
 let accessTokenMemory = null;
 
 export const authStorage = {
-    getAccessToken: () => accessTokenMemory,
+    getAccessToken: () => null, // No longer stored in JS
 
-    setAccessToken: (token) => {
-        accessTokenMemory = token || null;
-    },
+    getRefreshToken: () => null, // No longer stored in JS
 
-    /** For login/register - only access token stored (refresh token in httpOnly cookie) */
-    setTokens: (accessToken) => {
-        accessTokenMemory = accessToken || null;
-    },
+    setAccessToken: () => {},
+
+    setRefreshToken: () => {},
+
+    setTokens: () => {},
 
     clearTokens: () => {
-        accessTokenMemory = null;
-        // Clear any legacy localStorage tokens
-        ['access-token', 'refresh-token', 'token', 'accessToken', 'refreshToken'].forEach((k) =>
+        // We rely on backend logout to clear cookies
+        // But we can clear any accidental localStorage entries
+        ['refresh-token', 'access-token', 'token', 'accessToken', 'refreshToken', 'pod_access_token'].forEach((k) =>
             localStorage.removeItem(k)
         );
+        sessionStorage.removeItem('pod_access_token');
     },
 
-    isAuthenticated: () => !!accessTokenMemory,
+    isAuthenticated: () => true, // We'll rely on the user object in AuthProvider
 };

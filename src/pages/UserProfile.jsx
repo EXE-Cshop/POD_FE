@@ -20,7 +20,7 @@ const UserProfile = () => {
             await authService.logout();
         } catch (_) { /* ignore if already invalid */ }
         authStorage.clearTokens();
-        navigate('/home/login');
+        navigate('/login');
     };
 
     return (
@@ -54,7 +54,7 @@ const UserProfile = () => {
                         </div>
 
                         <nav className="space-y-2">
-                            <Link to="#" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-slate-50 text-primary font-bold transition-colors">
+                            <Link to="/home/profile" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-slate-50 text-primary font-bold transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">person</span>
                                 Profile Info
                             </Link>
@@ -62,11 +62,11 @@ const UserProfile = () => {
                                 <span className="material-symbols-outlined text-[20px]">inventory_2</span>
                                 My Orders
                             </Link>
-                            <Link to="#" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
+                            <Link to="/home" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">location_on</span>
                                 Saved Addresses
                             </Link>
-                            <Link to="#" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
+                            <Link to="/home" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">credit_card</span>
                                 Payment Methods
                             </Link>

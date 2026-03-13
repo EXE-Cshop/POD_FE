@@ -2,12 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { baseProductService, productVariantService, cartService } from '../services/api';
 import { authStorage } from '../utils/authStorage';
+import { guestCartStorage } from '../utils/guestCartStorage';
+import { useAuth } from '../components/AuthProvider';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
 
 const ProductDetails = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const { id } = useParams();
     const [selectedColor, setSelectedColor] = useState(null);
     const [selectedSize, setSelectedSize] = useState(null);
@@ -122,15 +125,28 @@ const ProductDetails = () => {
             setCartError('Vui lòng chọn màu sắc và kích cỡ.');
             return;
         }
-        const token = authStorage.getAccessToken();
-        if (!token) {
-            navigate('/home/login', { state: { from: `/home/product/${id}` } });
-            return;
-        }
+        
+        const isAuth = isAuthenticated;
+        
         setCartLoading(true);
         setCartError(null);
         try {
-            await cartService.addItem(selectedVariant.id, quantity);
+            if (isAuth) {
+                await cartService.addItem(selectedVariant.id, quantity);
+            } else {
+                // Anonymous Add to Cart
+                guestCartStorage.addItem({
+                    productVariantId: selectedVariant.id,
+                    productName: product.name,
+                    price: totalPrice,
+                    quantity: quantity,
+                    colorName: selectedColor,
+                    size: selectedSize,
+                    imageUrl: displayImage,
+                    availableSizes: sizesForSelectedColor.map(v => v.size)
+                });
+            }
+            
             setIsAdded(true);
             setShowToast(true);
             setTimeout(() => setIsAdded(false), 2000);

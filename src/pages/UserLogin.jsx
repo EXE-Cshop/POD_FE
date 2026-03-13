@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import api from '../services/api';
-import { authStorage } from '../utils/authStorage';
+import { useAuth } from '../components/AuthProvider';
+import { authService, cartService } from '../services/api';
+import { guestCartStorage } from '../utils/guestCartStorage';
 
 const UserLogin = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { login: setAuthData } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -17,13 +19,31 @@ const UserLogin = () => {
         const email = formData.get('username');
         const password = formData.get('password');
         try {
-            const res = await api.post('/auth/login', { email, password });
-            const { accessToken } = res.data?.data || res.data || {};
-            if (accessToken) {
-                authStorage.setTokens(accessToken);
+            const res = await authService.login({ email, password });
+            const { user } = res.data?.data || res.data || {};
+            if (user) {
+                // Merge Guest Cart Items
+                const guestItems = guestCartStorage.getCartItems();
+                if (guestItems.length > 0) {
+                    try {
+                        for (const item of guestItems) {
+                            await cartService.addItem(item.productVariantId, item.quantity, {
+                                frontPrintUrl: item.frontPrintUrl,
+                                backPrintUrl: item.backPrintUrl,
+                                customName: item.productName
+                            });
+                        }
+                        guestCartStorage.clearCart();
+                    } catch (mergeErr) {
+                        console.error('Failed to merge guest cart:', mergeErr);
+                    }
+                }
+
+                setAuthData(user);
+                const isAdmin = user.roles?.includes('SUPER_ADMIN') || user.role === 'SUPER_ADMIN';
+                const from = location.state?.from || (isAdmin ? '/admin/dashboard' : '/home');
+                navigate(from, { replace: true });
             }
-            const from = location.state?.from || '/home';
-            navigate(from, { replace: true });
         } catch (err) {
             const msg = err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại.';
             setError(msg);
@@ -38,7 +58,7 @@ const UserLogin = () => {
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">Sign in to your account</h2>
                 <p className="mt-2 text-sm text-slate-500">
                     Or{' '}
-                    <Link to="/home/register" className="font-semibold text-primary hover:text-primary/80 transition-colors">
+                    <Link to="/register" className="font-semibold text-primary hover:text-primary/80 transition-colors">
                         create a new account
                     </Link>
                 </p>

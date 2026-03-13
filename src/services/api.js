@@ -4,7 +4,7 @@ import { authStorage } from '../utils/authStorage';
 const API_BASE_URL = 'http://localhost:8080/api/v1';
 /** Backend origin for normalizing relative image URLs (e.g. sticker/upload links) */
 export const API_ORIGIN = (() => {
-  try { return new URL(API_BASE_URL).origin; } catch { return window?.location?.origin || 'http://localhost:8080'; }
+    try { return new URL(API_BASE_URL).origin; } catch { return window?.location?.origin || 'http://localhost:8080'; }
 })();
 
 const api = axios.create({
@@ -29,9 +29,39 @@ export const uploadImage = async (file) => {
 let isRefreshing = false;
 let failedQueue = [];
 
-const processQueue = (error, token = null) => {
-    failedQueue.forEach((prom) => (token ? prom.resolve(token) : prom.reject(error)));
+const processQueue = (error, data = null) => {
+    failedQueue.forEach((prom) => (data ? prom.resolve(data) : prom.reject(error)));
     failedQueue = [];
+};
+
+/**
+ * Shared refresh logic to ensure only one /auth/refresh is in flight.
+ * Returns the fresh user data on success.
+ */
+export const refreshSession = async () => {
+    if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+        });
+    }
+
+    isRefreshing = true;
+    try {
+        const res = await api.post('/auth/refresh', {});
+        const data = res.data?.data || res.data;
+        
+        if (data && data.user) {
+            processQueue(null, data);
+            return data;
+        }
+        throw new Error('Invalid refresh response');
+    } catch (err) {
+        processQueue(err);
+        authStorage.clearTokens();
+        throw err;
+    } finally {
+        isRefreshing = false;
+    }
 };
 
 api.interceptors.request.use(
@@ -50,33 +80,17 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
         const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
+        
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                }).then((token) => {
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
-                    return api(originalRequest);
-                });
-            }
             originalRequest._retry = true;
-            isRefreshing = true;
             try {
-                const res = await api.post('/auth/refresh', {});
-                const { accessToken } = res.data?.data || res.data || {};
-                if (accessToken) {
-                    authStorage.setAccessToken(accessToken);
-                    processQueue(null, accessToken);
-                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                    return api(originalRequest);
-                }
+                await refreshSession();
+                return api(originalRequest);
             } catch (refreshErr) {
-                processQueue(refreshErr, null);
-                authStorage.clearTokens();
-                if (typeof window !== 'undefined') window.location.href = '/home/login';
+                // If refresh fails, just reject.
+                // Redirection should be handled by components (e.g. ProtectedRoute)
+                // or specific page logic.
                 return Promise.reject(refreshErr);
-            } finally {
-                isRefreshing = false;
             }
         }
         return Promise.reject(error);
@@ -84,6 +98,8 @@ api.interceptors.response.use(
 );
 
 export const authService = {
+    login: (data) => api.post('/auth/login', data),
+    register: (data) => api.post('/auth/register', data),
     logout: () => api.post('/auth/logout'),
 };
 

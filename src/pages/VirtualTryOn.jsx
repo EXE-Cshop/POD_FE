@@ -49,6 +49,8 @@ const VirtualTryOn = () => {
     const [aiError, setAiError] = useState(null);
     const [addToCartLoading, setAddToCartLoading] = useState(false);
     const [addToCartError, setAddToCartError] = useState(null);
+    const [isAdded, setIsAdded] = useState(false);
+    const [showToast, setShowToast] = useState(false);
     const [originalPersonSize, setOriginalPersonSize] = useState({ width: 0, height: 0 });
 
     // Load design from localStorage (from DesignEditor)
@@ -316,7 +318,7 @@ const VirtualTryOn = () => {
         }
         const token = authStorage.getAccessToken();
         if (!token) {
-            navigate('/home/login', { state: { from: location.pathname } });
+            navigate('/login', { state: { from: location } });
             return;
         }
         setAddToCartLoading(true);
@@ -380,11 +382,13 @@ const VirtualTryOn = () => {
             const productName = product?.name ? `${product.name} - Custom Design` : 'Custom Design';
             const quantity = draft.quantity ?? 1;
             await cartService.addItem(matchedVariant.id, quantity, {
-                frontPrintUrl: frontPrintUrl || undefined,
-                backPrintUrl: backPrintUrl || undefined,
                 customName: productName,
             });
-            navigate('/home/cart');
+            // navigate('/home/cart'); // Removed auto-redirect
+            setIsAdded(true);
+            setShowToast(true);
+            setTimeout(() => setIsAdded(false), 2000);
+            setTimeout(() => setShowToast(false), 4000);
         } catch (err) {
             console.error('Add to cart from Try-On failed', err);
             setAddToCartError(err.response?.data?.message || err.message || 'Không thể thêm vào giỏ.');
@@ -473,15 +477,15 @@ const VirtualTryOn = () => {
                                     </button>
                                     <button
                                         onClick={handleAddToCartFromTryOn}
-                                        disabled={addToCartLoading}
-                                        className="flex items-center gap-1.5 px-4 py-2 bg-primary text-[#11221c] rounded-lg text-sm font-bold hover:brightness-110 transition-all shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                                        disabled={addToCartLoading || isAdded}
+                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-not-allowed ${isAdded ? 'bg-slate-100 text-slate-400' : 'bg-primary text-[#11221c] hover:brightness-110'}`}
                                     >
                                         {addToCartLoading ? (
                                             <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
                                         ) : (
-                                            <span className="material-symbols-outlined text-[16px]">shopping_cart</span>
+                                            <span className="material-symbols-outlined text-[16px]">{isAdded ? 'check_circle' : 'shopping_cart'}</span>
                                         )}
-                                        {addToCartLoading ? 'Đang xử lý...' : 'Thêm vào giỏ'}
+                                        {addToCartLoading ? 'Đang xử lý...' : isAdded ? 'Đã thêm' : 'Thêm vào giỏ'}
                                     </button>
                                 </div>
                             </div>
@@ -665,12 +669,12 @@ const VirtualTryOn = () => {
                                             </div>
                                         </div>
                                         <button
-                                                onClick={() => navigate(returnProductId ? `/design/${returnProductId}` : '/design')}
-                                                className="mt-3 w-full py-2 px-3 bg-primary/20 hover:bg-primary/30 border border-primary/40 rounded-lg text-sm font-bold text-[#11221c] transition-all flex items-center justify-center gap-2"
-                                            >
-                                                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-                                                Quay lại thiết kế
-                                            </button>
+                                            onClick={() => navigate(returnProductId ? `/design/${returnProductId}` : '/design')}
+                                            className="mt-3 w-full py-2 px-3 bg-primary/20 hover:bg-primary/30 border border-primary/40 rounded-lg text-sm font-bold text-[#11221c] transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                                            Quay lại thiết kế
+                                        </button>
                                     </div>
                                 )}
 
@@ -896,6 +900,28 @@ const VirtualTryOn = () => {
                         </div>
                     </div>
                 )}
+            </div>
+
+            {/* Toast Notification */}
+            <div className={`fixed bottom-8 right-8 z-50 transition-all duration-500 transform ${showToast ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+                <div className="bg-slate-900 border border-slate-700 text-white p-4 rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.3)] flex items-center gap-4 min-w-[320px]">
+                    <div className="size-10 bg-primary/20 text-primary rounded-full flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-[24px]">check_circle</span>
+                    </div>
+                    <div className="flex-1">
+                        <h4 className="font-bold text-white text-sm">Added to Cart</h4>
+                        <p className="text-xs text-slate-400 mt-0.5">Design added from Try-On — view cart to checkout</p>
+                    </div>
+                    <button
+                        onClick={() => navigate('/home/cart')}
+                        className="px-4 py-2 bg-primary text-[#11221c] text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                    >
+                        View Cart
+                    </button>
+                    <button onClick={() => setShowToast(false)} className="text-slate-500 hover:text-white transition-colors absolute top-2 right-2">
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                </div>
             </div>
         </div>
     );

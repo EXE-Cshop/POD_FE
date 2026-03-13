@@ -1,23 +1,64 @@
-import React, { useEffect } from 'react';
-import api from '../services/api';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import api, { refreshSession } from '../services/api';
 import { authStorage } from '../utils/authStorage';
 
-/**
- * On app load: if no access token in memory, try /auth/refresh (cookie sent automatically).
- * Restores session when user has valid refresh-token cookie from previous login.
- */
+const AuthContext = createContext(null);
+
+export const useAuth = () => useContext(AuthContext);
+
 const AuthProvider = ({ children }) => {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    const restoreSession = async () => {
+        try {
+            const userData = await refreshSession();
+            if (userData) {
+                setUser(userData);
+            }
+        } catch (error) {
+            console.error('Failed to restore session:', error);
+            setUser(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        if (authStorage.getAccessToken()) return;
-        api.post('/auth/refresh', {})
-            .then((res) => {
-                const { accessToken } = res.data?.data || res.data || {};
-                if (accessToken) authStorage.setAccessToken(accessToken);
-            })
-            .catch(() => {});
+        restoreSession();
     }, []);
 
-    return children;
+    const login = (userData) => {
+        // Tokens are in cookies now
+        setUser(userData);
+    };
+
+    const logout = async () => {
+        try {
+            await api.post('/auth/logout');
+        } catch (err) {
+            console.error('Logout API failed:', err);
+        } finally {
+            authStorage.clearTokens();
+            setUser(null);
+            window.location.href = '/login';
+        }
+    };
+
+    const value = {
+        user,
+        loading,
+        login,
+        logout,
+        isAuthenticated: !!user,
+        isAdmin: user?.roles?.includes('SUPER_ADMIN') || user?.role === 'SUPER_ADMIN',
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {!loading && children}
+        </AuthContext.Provider>
+    );
 };
 
 export default AuthProvider;

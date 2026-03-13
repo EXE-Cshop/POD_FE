@@ -4,6 +4,9 @@ import * as fabric from 'fabric';
 import { baseProductService, productVariantService, renderService, stickerService, designProductService, uploadImage, cartService, API_ORIGIN } from '../services/api';
 import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
 import { authStorage } from '../utils/authStorage';
+import { guestCartStorage } from '../utils/guestCartStorage';
+import Header from '../components/common/Header';
+import { useAuth } from '../components/AuthProvider';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
@@ -49,6 +52,7 @@ const DesignerPage = () => {
   const navigate = useNavigate();
   const { productId } = useParams();
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
   const sharedDesignIdRef = useRef(location.state?.sharedDesignId);
   const editingDesignRef = useRef(location.state?.editingDesign);
   const canvasRef = useRef(null);
@@ -88,10 +92,13 @@ const DesignerPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [apiStickers, setApiStickers] = useState([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveIsPublic, setSaveIsPublic] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isTryingOn, setIsTryingOn] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [cartLoading, setCartLoading] = useState(false);
   const frontDesignRef = useRef('[]');
   const backDesignRef = useRef('[]');
   const frontUndoStackRef = useRef([]);
@@ -227,7 +234,7 @@ const DesignerPage = () => {
         setCanUndo(undo.current.length > 0);
         setCanRedo(false);
       }
-    } catch (_) {}
+    } catch (_) { }
   }, [designSide, getStacksForSide, serializeDesignOnly]);
 
   const restoreDesignFromJson = useCallback((canvas, jsonStr, onDone) => {
@@ -513,8 +520,8 @@ const DesignerPage = () => {
       saveBeforeInteraction();
     });
 
-    canvas.on('object:added', () => {});
-    canvas.on('object:removed', () => {});
+    canvas.on('object:added', () => { });
+    canvas.on('object:removed', () => { });
     canvas.on('selection:created', (e) => syncSelectedProps(e.selected?.[0]));
     canvas.on('selection:updated', (e) => syncSelectedProps(e.selected?.[0]));
     canvas.on('selection:cleared', () => setSelectedObj(null));
@@ -661,7 +668,7 @@ const DesignerPage = () => {
       document.removeEventListener('keydown', handleKeyDown);
       try {
         canvas.dispose();
-      } catch (_) {}
+      } catch (_) { }
       fabricRef.current = null;
     };
   }, [productLoading]);
@@ -940,6 +947,7 @@ const DesignerPage = () => {
       return;
     }
     setRenderError(null);
+    setCartLoading(true);
 
     let frontPrintUrl = null;
     let backPrintUrl = null;
@@ -1009,22 +1017,36 @@ const DesignerPage = () => {
     }
     console.log('Matched variant:', matchedVariant, 'from', variants.length, 'variants');
 
-    const token = authStorage.getAccessToken();
-    if (!token) {
-      navigate('/home/login', { state: { from: location.pathname } });
-      return;
-    }
+    const isAuth = isAuthenticated;
 
     try {
       const productName = product?.name ? `${product.name} - Custom Design` : 'Custom Design';
-      await cartService.addItem(matchedVariant.id, quantity, {
-        frontPrintUrl,
-        backPrintUrl,
-        customName: productName,
-      });
+
+      if (isAuth) {
+        await cartService.addItem(matchedVariant.id, quantity, {
+          frontPrintUrl,
+          backPrintUrl,
+          customName: productName,
+        });
+      } else {
+        // Anonymous Add to Cart
+        guestCartStorage.addItem({
+          productVariantId: matchedVariant.id,
+          productName: productName,
+          price: (product?.basePrice ?? BASE_PRICE),
+          quantity: quantity,
+          colorName: activeColor,
+          size: selectedSize,
+          imageUrl: designSide === 'front' ? frontPrintUrl : backPrintUrl || designSide === 'front' ? tshirtImages[activeColor] : tshirtImages[activeColor], // Fallback to plain tshirt
+          frontPrintUrl,
+          backPrintUrl,
+          availableSizes: SIZES
+        });
+      }
     } catch (err) {
       console.error('Add to cart failed', err);
       setRenderError(err.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
+      setCartLoading(false);
       return;
     }
 
@@ -1046,50 +1068,14 @@ const DesignerPage = () => {
     sessionStorage.setItem(POD_DESIGNER_DRAFT, JSON.stringify(draft));
     sessionStorage.setItem('pod_tryon_product_id', productId || '');
 
-    navigate('/home/cart');
+    // navigate('/home/cart'); // Removed auto-redirect
     setIsAdded(true);
     setShowToast(true);
+    setCartLoading(false);
     setTimeout(() => setIsAdded(false), 2000);
     setTimeout(() => setShowToast(false), 4000);
   };
 
-  const handleTryOn = () => {
-    const canvas = fabricRef.current;
-    if (!canvas) return;
-
-    const saveDesignToRef = () => {
-      const objs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
-      return JSON.stringify(objs.map((o) => o.toObject(['data'])));
-    };
-    if (designSide === 'front') frontDesignRef.current = saveDesignToRef();
-    else backDesignRef.current = saveDesignToRef();
-
-    const draft = {
-      frontDesign: frontDesignRef.current,
-      backDesign: backDesignRef.current,
-      designSide,
-      activeColor,
-      productId: productId || null,
-      selectedSize,
-      quantity,
-    };
-    try {
-      sessionStorage.setItem(POD_DESIGNER_DRAFT, JSON.stringify(draft));
-      sessionStorage.setItem('pod_tryon_product_id', productId || '');
-
-      const printOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
-      if (printOverlay) printOverlay.set('visible', false);
-      canvas.renderAll();
-      const dataUrl = canvas.toDataURL('image/png');
-      if (printOverlay) printOverlay.set('visible', true);
-      canvas.renderAll();
-
-      localStorage.setItem('pod_tryon_design', dataUrl);
-      navigate('/home/virtual-try-on', { state: { fromDesigner: true, productId: productId || null } });
-    } catch (err) {
-      console.error('handleTryOn failed', err);
-    }
-  };
 
   const handleSaveDesign = async () => {
     const canvas = fabricRef.current;
@@ -1265,7 +1251,7 @@ const DesignerPage = () => {
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
     if (clickedOnDesignLayer) return;
     isPanningRef.current = true;
     panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
@@ -1289,6 +1275,56 @@ const DesignerPage = () => {
   ];
 
   // ─── Render ───────────────────────────────────────────────────────
+
+  const handleTryOn = async () => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    setIsTryingOn(true);
+    try {
+      // 1. Save current state to draft
+      const saveDesignToRef = () => {
+        const objs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+        return JSON.stringify(objs.map((o) => o.toObject(['data'])));
+      };
+      if (designSide === 'front') frontDesignRef.current = saveDesignToRef();
+      else backDesignRef.current = saveDesignToRef();
+
+      const draft = {
+        frontDesign: frontDesignRef.current,
+        backDesign: backDesignRef.current,
+        designSide,
+        activeColor,
+        productId: productId || null,
+        selectedSize,
+        quantity,
+      };
+      sessionStorage.setItem(POD_DESIGNER_DRAFT, JSON.stringify(draft));
+      sessionStorage.setItem('pod_tryon_product_id', productId || '');
+
+      // 2. Capture canvas
+      const printOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
+      if (printOverlay) printOverlay.set('visible', false);
+      canvas.renderAll();
+
+      const dataUrl = canvas.toDataURL({
+        format: 'png',
+        quality: 1,
+        multiplier: 2,
+      });
+
+      if (printOverlay) printOverlay.set('visible', true);
+      canvas.renderAll();
+
+      localStorage.setItem('pod_tryon_design', dataUrl);
+      navigate('/home/virtual-try-on', { state: { fromDesigner: true, productId: productId || null } });
+    } catch (err) {
+      console.error('Failed to capture design for Try-On:', err);
+      localStorage.setItem('pod_tryon_design', product?.imageUrl || TSHIRT_IMAGES_FALLBACK[activeColor]);
+      navigate('/home/virtual-try-on');
+    } finally {
+      setIsTryingOn(false);
+    }
+  };
 
   if (productLoading) {
     return (
@@ -1314,115 +1350,8 @@ const DesignerPage = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background-light font-display text-slate-900">
       {/* ── Header ─────────────────────────────────────────────── */}
-      <header className="flex items-center justify-between border-b border-solid border-slate-200 px-6 py-3 bg-white z-50">
-        <div className="flex items-center gap-4 md:gap-6">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center justify-center size-10 rounded-full bg-slate-100 text-slate-600 hover:bg-primary hover:text-[#11221c] transition-colors"
-            title="Back to Shop"
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
+      <Header />
 
-          <div className="flex items-center gap-3 border-r border-slate-200 pr-4 md:pr-6 cursor-pointer" onClick={() => navigate('/home')}>
-            <div className="size-8 bg-primary rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6 text-[#11221c]" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <path clipRule="evenodd" d="M39.475 21.6262C40.358 21.4363 40.6863 21.5589 40.7581 21.5934C40.7876 21.655 40.8547 21.857 40.8082 22.3336C40.7408 23.0255 40.4502 24.0046 39.8572 25.2301C38.6799 27.6631 36.5085 30.6631 33.5858 33.5858C30.6631 36.5085 27.6632 38.6799 25.2301 39.8572C24.0046 40.4502 23.0255 40.7407 22.3336 40.8082C21.8571 40.8547 21.6551 40.7875 21.5934 40.7581C21.5589 40.6863 21.4363 40.358 21.6262 39.475C21.8562 38.4054 22.4689 36.9657 23.5038 35.2817C24.7575 33.2417 26.5497 30.9744 28.7621 28.762C30.9744 26.5497 33.2417 24.7574 35.2817 23.5037C36.9657 22.4689 38.4054 21.8562 39.475 21.6262ZM4.41189 29.2403L18.7597 43.5881C19.8813 44.7097 21.4027 44.9179 22.7217 44.7893C24.0585 44.659 25.5148 44.1631 26.9723 43.4579C29.9052 42.0387 33.2618 39.5667 36.4142 36.4142C39.5667 33.2618 42.0387 29.9052 43.4579 26.9723C44.1631 25.5148 44.659 24.0585 44.7893 22.7217C44.9179 21.4027 44.7097 19.8813 43.5881 18.7597L29.2403 4.41187C27.8527 3.02428 25.8765 3.02573 24.2861 3.36776C22.6081 3.72863 20.7334 4.58419 18.8396 5.74801C16.4978 7.18716 13.9881 9.18353 11.5858 11.5858C9.18354 13.988 7.18717 16.4978 5.74802 18.8396C4.58421 20.7334 3.72865 22.6081 3.36778 24.2861C3.02574 25.8765 3.02429 27.8527 4.41189 29.2403Z" fill="currentColor" fillRule="evenodd" />
-              </svg>
-            </div>
-            <h2 className="text-lg font-bold leading-tight tracking-tight hidden sm:block">POD Print</h2>
-          </div>
-
-          <div className="hidden md:flex flex-col">
-            <h2 className="text-sm font-bold leading-tight tracking-tight">{product?.name || 'Classic Tee'}</h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-              {((product?.basePrice ?? BASE_PRICE) * quantity).toLocaleString('vi-VN')} đ
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-4 sm:gap-6 pr-4 sm:pr-6 border-r border-slate-200">
-            <button
-              onClick={clearCanvas}
-              className="hidden sm:flex min-w-[84px] items-center justify-center rounded-lg h-9 px-4 border border-slate-300 hover:bg-slate-100 text-sm font-bold transition-all gap-2"
-            >
-              <span className="material-symbols-outlined text-base">restart_alt</span>
-              <span>Reset</span>
-            </button>
-            <button
-              onClick={() => {
-                const ed = editingDesignRef.current;
-                if (ed) {
-                  setSaveName(ed.name || '');
-                  setSaveIsPublic(ed.isPublic ?? false);
-                } else {
-                  setSaveName('');
-                  setSaveIsPublic(false);
-                }
-                setSaveError(null);
-                setShowSaveModal(true);
-              }}
-              className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 border border-slate-300 hover:bg-slate-100 text-sm font-bold transition-all gap-2"
-              title="Lưu thiết kế"
-            >
-              <span className="material-symbols-outlined text-base">save</span>
-              <span>Lưu thiết kế</span>
-            </button>
-            <button
-              onClick={handleTryOn}
-              className="hidden sm:flex min-w-[100px] items-center justify-center rounded-lg h-9 px-4 bg-gradient-to-r from-primary/20 to-emerald-100 border border-primary/30 text-sm font-bold text-[#11221c] hover:from-primary/30 hover:to-emerald-200 transition-all gap-2"
-              title="Thử đồ ảo với thiết kế hiện tại"
-            >
-              <span className="material-symbols-outlined text-base">checkroom</span>
-              <span>Try On</span>
-            </button>
-            <button
-              onClick={handleAIReview}
-              className="hidden sm:flex min-w-[110px] items-center justify-center rounded-lg h-9 px-4 bg-[#11221c] border border-[#11221c] text-sm font-bold text-white hover:bg-slate-800 transition-all gap-2 shadow-sm"
-              title="Nhờ AI nhận xét thiết kế"
-            >
-              <span className="material-symbols-outlined text-base text-primary">auto_awesome</span>
-              <span>Ask AI Review</span>
-            </button>
-            {renderError && (
-              <p className="text-xs text-red-500 font-medium max-w-[200px] truncate" title={renderError}>{renderError}</p>
-            )}
-            <button
-              onClick={addToCart}
-              disabled={isAdded}
-              className={`flex min-w-[110px] items-center justify-center rounded-lg h-9 px-4 text-sm font-bold transition-all duration-300 gap-2 ${
-                isAdded
-                  ? 'bg-primary text-[#11221c] shadow-[0_0_15px_rgba(20,200,100,0.3)]'
-                  : 'bg-primary text-[#11221c] shadow-lg shadow-primary/20 hover:scale-105'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">
-                {isAdded ? 'check_circle' : 'upload'}
-              </span>
-              <span>{isAdded ? 'Added!' : 'Add to Cart'}</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/home/cart')}
-              className="relative size-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors group cursor-pointer"
-              title="View Cart"
-            >
-              <span className="material-symbols-outlined text-slate-600 group-hover:text-primary transition-colors">shopping_cart</span>
-              <span className="absolute top-1.5 right-1.5 size-4 bg-primary text-[#11221c] text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">3</span>
-            </button>
-            <button
-              onClick={() => navigate('/home/login')}
-              className="flex items-center justify-center size-10 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
-              title="Sign In / Account"
-            >
-              <span className="material-symbols-outlined text-slate-600 hover:text-primary transition-colors text-[24px]">account_circle</span>
-            </button>
-          </div>
-        </div>
-      </header>
 
       {/* ── Main Body ──────────────────────────────────────────── */}
       <main className="flex flex-1 overflow-hidden">
@@ -1432,9 +1361,8 @@ const DesignerPage = () => {
             <button
               key={tool.id}
               onClick={() => setActiveTool(tool.id)}
-              className={`p-3 rounded-xl transition-colors ${
-                activeTool === tool.id ? 'bg-primary/10 text-primary' : 'hover:bg-slate-100 text-slate-500'
-              }`}
+              className={`p-3 rounded-xl transition-colors ${activeTool === tool.id ? 'bg-primary/10 text-primary' : 'hover:bg-slate-100 text-slate-500'
+                }`}
               title={tool.label}
             >
               <span className="material-symbols-outlined">{tool.icon}</span>
@@ -1662,19 +1590,28 @@ const DesignerPage = () => {
         {/* ── Center: Canvas ──────────────────────────────────── */}
         <section className="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] bg-[length:20px_20px]">
           {/* Front/Back Toggle */}
-          <div className="absolute top-6 left-6 flex gap-2 z-10">
+          <div className="absolute top-6 left-6 flex gap-4 z-10">
             <button
-              onClick={() => switchDesignSide('front')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${designSide === 'front' ? 'bg-primary text-[#11221c]' : 'bg-white border border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}
+              onClick={() => navigate(-1)}
+              className="size-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-primary hover:border-primary transition-all shadow-sm"
+              title="Quay lại"
             >
-              Mặt trước
+              <span className="material-symbols-outlined">arrow_back</span>
             </button>
-            <button
-              onClick={() => switchDesignSide('back')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${designSide === 'back' ? 'bg-primary text-[#11221c]' : 'bg-white border border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}`}
-            >
-              Mặt sau
-            </button>
+            <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+              <button
+                onClick={() => switchDesignSide('front')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${designSide === 'front' ? 'bg-primary text-[#11221c]' : 'text-slate-500 hover:text-primary'}`}
+              >
+                Mặt trước
+              </button>
+              <button
+                onClick={() => switchDesignSide('back')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${designSide === 'back' ? 'bg-primary text-[#11221c]' : 'text-slate-500 hover:text-primary'}`}
+              >
+                Mặt sau
+              </button>
+            </div>
           </div>
 
           {/* Contextual Toolbar */}
@@ -1698,11 +1635,6 @@ const DesignerPage = () => {
             </button>
             <button onClick={sendToBack} className="p-2 hover:bg-slate-100 rounded-lg" title="Send to Back">
               <span className="material-symbols-outlined text-xl">flip_to_back</span>
-            </button>
-            <div className="w-px h-6 bg-slate-200 mx-1"></div>
-            <button onClick={clearCanvas} className="flex items-center gap-2 px-3 py-2 bg-primary/20 text-primary rounded-lg text-xs font-bold" title="Reset Canvas">
-              <span className="material-symbols-outlined text-sm">restart_alt</span>
-              <span>Reset</span>
             </button>
           </div>
 
@@ -1876,9 +1808,8 @@ const DesignerPage = () => {
                       <button
                         key={layer.id}
                         onClick={() => selectLayer(layer.obj)}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${
-                          isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-slate-50 border border-transparent'
-                        }`}
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left ${isActive ? 'bg-primary/10 border border-primary/30' : 'hover:bg-slate-50 border border-transparent'
+                          }`}
                       >
                         <span className="material-symbols-outlined text-sm text-slate-400">drag_indicator</span>
                         <div className="size-8 bg-slate-100 rounded flex items-center justify-center">
@@ -1934,11 +1865,78 @@ const DesignerPage = () => {
                 +
               </button>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-              <span className="text-xs text-slate-500">Tổng:</span>
-              <span className="text-sm font-bold text-slate-900">
-                {(BASE_PRICE * quantity).toLocaleString('vi-VN')} đ
-              </span>
+            <div className="flex flex-col gap-4 mt-4 pt-4 border-t border-slate-200">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-slate-500">Tổng cộng:</span>
+                <span className="text-lg font-black text-primary">
+                  {((product?.basePrice ?? BASE_PRICE) * quantity).toLocaleString('vi-VN')} đ
+                </span>
+              </div>
+
+              <button
+                onClick={addToCart}
+                disabled={isAdded || cartLoading}
+                className={`w-full flex items-center justify-center gap-3 h-12 rounded-xl text-sm font-bold transition-all duration-300 ${isAdded
+                  ? 'bg-slate-100 text-slate-400 cursor-default'
+                  : 'bg-primary text-[#11221c] shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed'
+                  }`}
+              >
+                {cartLoading ? (
+                  <div className="size-5 border-2 border-[#11221c]/30 border-t-[#11221c] rounded-full animate-spin" />
+                ) : (
+                  <span className="material-symbols-outlined text-xl">
+                    {isAdded ? 'check_circle' : 'shopping_cart'}
+                  </span>
+                )}
+                <span>{cartLoading ? 'Đang thêm...' : isAdded ? 'Đã thêm vào giỏ' : 'Thêm vào giỏ hàng'}</span>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const ed = editingDesignRef.current;
+                    if (ed) {
+                      setSaveName(ed.name || '');
+                      setSaveIsPublic(ed.isPublic ?? false);
+                    } else {
+                      setSaveName('');
+                      setSaveIsPublic(false);
+                    }
+                    setSaveError(null);
+                    setShowSaveModal(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 h-10 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all text-xs font-bold"
+                >
+                  <span className="material-symbols-outlined text-lg">save</span>
+                  <span>Lưu thiết kế</span>
+                </button>
+                <button
+                  onClick={() => setShowResetModal(true)}
+                  className="flex items-center justify-center aspect-square h-10 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all"
+                  title="Reset thiết kế"
+                >
+                  <span className="material-symbols-outlined text-lg">restart_alt</span>
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleTryOn}
+                  disabled={isTryingOn}
+                  className="w-full flex items-center justify-center gap-2 h-10 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all text-xs font-bold"
+                >
+                  <span className="material-symbols-outlined text-lg">{isTryingOn ? 'sync' : 'shirt'}</span>
+                  <span>{isTryingOn ? 'Đang chuẩn bị...' : 'Thử ngay (3D Try On)'}</span>
+                </button>
+
+                <button
+                  onClick={handleAIReview}
+                  className="w-full flex items-center justify-center gap-2 py-2 text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                  <span>Ask AI Review</span>
+                </button>
+              </div>
             </div>
           </div>
         </aside>
@@ -1965,6 +1963,36 @@ const DesignerPage = () => {
               <button onClick={() => !saving && setShowSaveModal(false)} className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold hover:bg-slate-50">Hủy</button>
               <button onClick={handleSaveDesign} disabled={saving || !saveName.trim()} className="px-4 py-2 bg-primary text-[#11221c] rounded-lg text-sm font-bold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed">
                 {saving ? 'Đang lưu...' : 'Lưu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reset Confirmation Modal ────────────────────────────── */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowResetModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="size-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-3xl">restart_alt</span>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Reset thiết kế?</h3>
+            <p className="text-sm text-slate-500 mb-6">Bạn có chắc chắn muốn xóa toàn bộ thiết kế hiện tại không? Hành động này không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  clearCanvas();
+                  setShowResetModal(false);
+                }}
+                className="flex-1 py-2.5 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
+              >
+                Reset ngay
               </button>
             </div>
           </div>
