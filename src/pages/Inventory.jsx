@@ -8,31 +8,80 @@ const Inventory = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    useEffect(() => {
-        const fetchProducts = async () => {
-            setLoading(true);
-            try {
-                const response = await baseProductService.getAll({ page: 1, size: 50 });
-                console.log('Admin Products API Response:', response.data);
-                const apiData = response.data;
-                let productList = [];
-                if (apiData?.data?.content) {
-                    productList = apiData.data.content;
-                } else if (Array.isArray(apiData?.data)) {
-                    productList = apiData.data;
-                } else if (Array.isArray(apiData)) {
-                    productList = apiData;
-                }
-                setProducts(productList);
-            } catch (err) {
-                console.error('Failed to fetch base products:', err);
-                setError('Failed to load products.');
-            } finally {
-                setLoading(false);
+    // Create Modal State
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formData, setFormData] = useState({
+        name: '',
+        code: '',
+        basePrice: '',
+        material: '',
+        printTechnology: '',
+        imageUrl: '',
+        active: true
+    });
+
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            const response = await baseProductService.getAll({ page: 1, size: 50 });
+            console.log('Admin Products API Response:', response.data);
+            const apiData = response.data;
+            let productList = [];
+            if (apiData?.data?.content) {
+                productList = apiData.data.content;
+            } else if (Array.isArray(apiData?.data)) {
+                productList = apiData.data;
+            } else if (Array.isArray(apiData)) {
+                productList = apiData;
             }
-        };
+            setProducts(productList);
+        } catch (err) {
+            console.error('Failed to fetch base products:', err);
+            setError('Failed to load products.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchProducts();
     }, []);
+
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            await baseProductService.create({
+                ...formData,
+                basePrice: parseFloat(formData.basePrice) || 0
+            });
+            setIsModalOpen(false);
+            setFormData({
+                name: '',
+                code: '',
+                basePrice: '',
+                material: '',
+                printTechnology: '',
+                imageUrl: '',
+                active: true
+            });
+            fetchProducts();
+        } catch (err) {
+            console.error('Failed to create product:', err);
+            alert('Failed to create product. Please check console for details.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const formatPrice = (price) => {
         if (!price) return '0₫';
@@ -42,10 +91,118 @@ const Inventory = () => {
     return (
         <div className="flex-1 overflow-auto max-w-[1200px] mx-auto py-8 px-4 text-slate-900 ">
             {/* Section Header */}
-            <div className="mb-6">
-                <h1 className="text-slate-900  text-3xl font-extrabold tracking-tight">Base Product Management</h1>
-                <p className="text-slate-500  mt-1">Configure blank merchandise and define printable zones for the customization engine.</p>
+            <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-slate-900  text-3xl font-extrabold tracking-tight">Base Product Management</h1>
+                    <p className="text-slate-500  mt-1">Configure blank merchandise and define printable zones for the customization engine.</p>
+                </div>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-background-dark rounded-lg text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
+                >
+                    <span className="material-symbols-outlined text-[20px]">add_box</span>
+                    Add Base Product
+                </button>
             </div>
+
+            {/* Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                            <h2 className="text-xl font-black text-slate-900">Add New Base Product</h2>
+                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Name</label>
+                                    <input
+                                        required
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleInputChange}
+                                        className="w-full h-11 px-4 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/50 outline-none"
+                                        placeholder="e.g. Classic T-Shirt"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Code</label>
+                                    <input
+                                        required
+                                        name="code"
+                                        value={formData.code}
+                                        onChange={handleInputChange}
+                                        className="w-full h-11 px-4 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/50 outline-none"
+                                        placeholder="TS-001"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Base Price</label>
+                                    <input
+                                        required
+                                        type="number"
+                                        name="basePrice"
+                                        value={formData.basePrice}
+                                        onChange={handleInputChange}
+                                        className="w-full h-11 px-4 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/50 outline-none"
+                                        placeholder="150000"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Material</label>
+                                    <input
+                                        name="material"
+                                        value={formData.material}
+                                        onChange={handleInputChange}
+                                        className="w-full h-11 px-4 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/50 outline-none"
+                                        placeholder="100% Cotton"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Print Tech</label>
+                                    <input
+                                        name="printTechnology"
+                                        value={formData.printTechnology}
+                                        onChange={handleInputChange}
+                                        className="w-full h-11 px-4 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/50 outline-none"
+                                        placeholder="DTG"
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Image URL</label>
+                                    <input
+                                        name="imageUrl"
+                                        value={formData.imageUrl}
+                                        onChange={handleInputChange}
+                                        className="w-full h-11 px-4 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/50 outline-none"
+                                        placeholder="https://example.com/image.jpg"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="flex-1 h-11 rounded-lg border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="flex-1 h-11 rounded-lg bg-primary text-background-dark font-bold hover:brightness-110 disabled:opacity-50 transition-all"
+                                >
+                                    {isSubmitting ? 'Creating...' : 'Create Product'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
 
             {/* Content */}
             {loading ? (

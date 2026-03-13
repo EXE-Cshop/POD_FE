@@ -1,0 +1,61 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img [ref=e8]
+        - heading "POD Print" [level=2] [ref=e10]
+      - navigation [ref=e11]:
+        - link "Home" [ref=e12] [cursor=pointer]:
+          - /url: /login
+        - link "Products" [ref=e13] [cursor=pointer]:
+          - /url: /login
+        - link "Pricing" [ref=e14] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "Welcome Back" [level=1] [ref=e18]
+        - paragraph [ref=e19]: Login to your POD Dashboard
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: Username
+          - textbox "Admin Username" [ref=e23]
+        - generic [ref=e24]:
+          - generic [ref=e25]: Password
+          - generic [ref=e26]:
+            - textbox "Enter your password" [ref=e27]
+            - button "visibility" [ref=e28]:
+              - generic [ref=e29]: visibility
+        - generic [ref=e30]:
+          - generic [ref=e31] [cursor=pointer]:
+            - checkbox "Remember me" [ref=e32]
+            - generic [ref=e33]: Remember me
+          - link "Forgot password?" [ref=e34] [cursor=pointer]:
+            - /url: /login
+        - button "Sign In login" [ref=e35]:
+          - generic [ref=e36]: Sign In
+          - generic [ref=e37]: login
+      - generic [ref=e42]: Or continue with
+      - generic [ref=e43]:
+        - button "Google Logo Google" [ref=e44]:
+          - img "Google Logo" [ref=e45]
+          - generic [ref=e46]: Google
+        - button "work SSO" [ref=e47]:
+          - generic [ref=e48]: work
+          - generic [ref=e49]: SSO
+      - paragraph [ref=e50]:
+        - text: Don't have an account?
+        - link "Register here" [ref=e51] [cursor=pointer]:
+          - /url: /login
+    - paragraph [ref=e53]:
+      - text: By signing in, you agree to our
+      - link "Terms of Service" [ref=e54] [cursor=pointer]:
+        - /url: /login
+      - text: and
+      - link "Privacy Policy" [ref=e55] [cursor=pointer]:
+        - /url: /login
+      - text: .
+```

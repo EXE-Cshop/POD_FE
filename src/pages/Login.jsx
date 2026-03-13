@@ -1,20 +1,37 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 const Login = () => {
     const navigate = useNavigate();
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
-        if (username === 'admin' && password === 'admin') {
-            localStorage.setItem('isAdminAuthenticated', 'true');
-            navigate('/admin/users');
-        } else {
-            setError('Invalid username or password');
+        setIsLoading(true);
+        localStorage.clear(); // Clear any stale tokens/state
+        try {
+            const res = await api.post('/auth/login', { email, password });
+            const { accessToken, refreshToken } = res.data?.data || res.data || {};
+            if (accessToken) {
+                localStorage.setItem('token', accessToken);
+                localStorage.setItem('accessToken', accessToken);
+                localStorage.setItem('refreshToken', refreshToken || '');
+                localStorage.setItem('isAdminAuthenticated', 'true');
+                navigate('/admin/users');
+            } else {
+                setError('Login failed: No access token received.');
+            }
+        } catch (err) {
+            console.error('Login error:', err);
+            const msg = err.response?.data?.message || 'Login failed. Please check your credentials.';
+            setError(msg);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -49,7 +66,7 @@ const Login = () => {
                         <p className="text-slate-500  text-base font-normal leading-normal text-center">Login to your POD Dashboard</p>
                     </div>
                     {/* Login Form */}
-                    <form className="space-y-5" onSubmit={handleLogin}>
+                    <form className="flex flex-col gap-6" onSubmit={handleLogin} noValidate>
                         {error && (
                             <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm">
                                 {error}
@@ -62,8 +79,9 @@ const Login = () => {
                                 className="flex w-full rounded-lg text-slate-900  border border-slate-200  bg-slate-50  focus:outline-0 focus:ring-2 focus:ring-primary/50 focus:border-primary h-12 placeholder:text-slate-400 p-4 text-base font-normal leading-normal transition-all"
                                 placeholder="Admin Username"
                                 type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
                             />
                         </div>
                         {/* Password Field */}
