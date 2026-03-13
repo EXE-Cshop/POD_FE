@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-
-const API_BASE_URL = 'http://localhost:8080';
+import { useNavigate } from 'react-router-dom';
+import { cartService } from '../services/api';
 
 const Cart = () => {
     const navigate = useNavigate();
@@ -10,33 +9,16 @@ const Cart = () => {
     const [error, setError] = useState(null);
     const [updatingItems, setUpdatingItems] = useState({});
 
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('accessToken');
-        return {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-        };
-    };
-
     const fetchCart = async () => {
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-            navigate('/home/login');
-            return;
-        }
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/cart`, {
-                headers: getAuthHeaders(),
-            });
-            if (response.status === 401 || response.status === 403) {
-                navigate('/home/login');
-                return;
-            }
-            if (!response.ok) throw new Error('Failed to fetch cart');
-            const result = await response.json();
-            setCartItems(result.data?.items || []);
+            const res = await cartService.get();
+            setCartItems(res.data?.data?.items || res.data?.items || []);
         } catch (err) {
-            setError(err.message);
+            if (err.response?.status === 401 || err.response?.status === 403) {
+                navigate('/home/login');
+            } else {
+                setError(err.message || 'Failed to fetch cart');
+            }
         } finally {
             setLoading(false);
         }
@@ -50,14 +32,8 @@ const Cart = () => {
         if (newQuantity < 1) return;
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/cart/items/${itemId}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ quantity: newQuantity }),
-            });
-            if (!response.ok) throw new Error('Failed to update item');
-            const result = await response.json();
-            setCartItems(result.data?.items || []);
+            const res = await cartService.updateItem(itemId, { quantity: newQuantity });
+            setCartItems(res.data?.data?.items || res.data?.items || []);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -68,14 +44,8 @@ const Cart = () => {
     const updateSize = async (itemId, newSize, currentQuantity) => {
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/cart/items/${itemId}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({ quantity: currentQuantity, size: newSize }),
-            });
-            if (!response.ok) throw new Error('Failed to update size');
-            const result = await response.json();
-            setCartItems(result.data?.items || []);
+            const res = await cartService.updateItem(itemId, { quantity: currentQuantity, size: newSize });
+            setCartItems(res.data?.data?.items || res.data?.items || []);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -86,13 +56,8 @@ const Cart = () => {
     const removeItem = async (itemId) => {
         setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/cart/items/${itemId}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders(),
-            });
-            if (!response.ok) throw new Error('Failed to remove item');
-            const result = await response.json();
-            setCartItems(result.data?.items || []);
+            const res = await cartService.removeItem(itemId);
+            setCartItems(res.data?.data?.items || res.data?.items || []);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -141,10 +106,14 @@ const Cart = () => {
                 <h2 className="text-3xl font-black text-slate-900 mb-4">Your Cart is Empty</h2>
                 <p className="text-slate-500 mb-8 max-w-md">Looks like you haven't added anything to your cart yet. Let's get you set up with some premium custom gear.</p>
                 <button
-                    onClick={() => navigate('/home/catalog')}
+                    onClick={() => {
+                        let pid = sessionStorage.getItem('pod_tryon_product_id');
+                        if (!pid) { try { pid = JSON.parse(sessionStorage.getItem('pod_designer_draft') || '{}')?.productId; } catch {} }
+                        navigate(pid ? `/design/${pid}` : '/design');
+                    }}
                     className="h-12 px-8 bg-primary text-[#11221c] font-extrabold rounded-lg hover:bg-primary/90 transition-all shadow-md"
                 >
-                    Start Shopping
+                    Continue Design
                 </button>
             </div>
         );
@@ -257,14 +226,19 @@ const Cart = () => {
                         </div>
                     ))}
 
-                    {/* Continue Shopping */}
+                    {/* Continue Design */}
                     <div className="mt-4">
                         <button
-                            onClick={() => navigate('/home/catalog')}
+                            onClick={() => {
+                                const raw = sessionStorage.getItem('pod_designer_draft');
+                                let productId = sessionStorage.getItem('pod_tryon_product_id');
+                                if (!productId && raw) { try { productId = JSON.parse(raw)?.productId; } catch {} }
+                                navigate(productId ? `/design/${productId}` : '/design');
+                            }}
                             className="flex items-center text-slate-500 hover:text-primary font-bold text-sm transition-colors"
                         >
                             <span className="material-symbols-outlined text-[18px] mr-2">arrow_back</span>
-                            Continue Shopping
+                            Continue Design
                         </button>
                     </div>
                 </div>

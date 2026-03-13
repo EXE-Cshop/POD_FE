@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import AuthProvider from './components/AuthProvider';
 import DashboardLayout from './layouts/DashboardLayout';
 import HomeLayout from './layouts/HomeLayout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -39,6 +40,7 @@ import SchedulerDashboard from './pages/SchedulerDashboard';
 function App() {
   return (
     <BrowserRouter>
+      <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/design/:productId" element={<DesignerPage />} />
@@ -82,6 +84,7 @@ function App() {
 
         <Route path="/" element={<Navigate to="/home" replace />} />
       </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

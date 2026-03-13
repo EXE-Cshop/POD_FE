@@ -45,19 +45,19 @@ function buildLayerBase(left, top, w, h, obj, idx) {
 
 export function serializedToRenderLayers(objs) {
   if (!Array.isArray(objs)) return [];
-  return objs.map((obj, idx) => {
+  const layers = [];
+  objs.forEach((obj) => {
     const left = obj.left ?? 0;
     const top = obj.top ?? 0;
-    // Fabric toObject: width/height = base; scaleX/scaleY = zoom. serializeDesignObjects: width/height already scaled.
     const scaleX = toNum(obj.scaleX, 1);
     const scaleY = toNum(obj.scaleY, 1);
     const baseW = obj.width ?? (obj.type === 'textbox' ? 100 : 1);
     const baseH = obj.height ?? (obj.type === 'textbox' ? (obj.fontSize || 24) * 1.5 : 1);
     const w = obj._scaledDimensions ? baseW : baseW * scaleX;
     const h = obj._scaledDimensions ? baseH : baseH * scaleY;
-    const base = buildLayerBase(left, top, w, h, obj, idx);
+    const base = buildLayerBase(left, top, w, h, obj, layers.length);
     if (obj.type === 'textbox') {
-      return {
+      layers.push({
         ...base,
         text: String(obj.text ?? ''),
         fontFamily: obj.fontFamily ?? 'Arial',
@@ -69,14 +69,17 @@ export function serializedToRenderLayers(objs) {
         scaleX,
         scaleY,
         textBoxWidthCanvasPx: toNum(obj.width ?? obj._originalWidth, 100),
-      };
+      });
+      return;
     }
-    let url = obj.src || '';
+    let url = String(obj.src || obj.url || '').trim();
     if (url && !url.startsWith('http') && !url.startsWith('data:')) {
       url = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
     }
-    return { ...base, url: url || '', opacity: toNum(obj.opacity, 1) };
+    if (!url) return;
+    layers.push({ ...base, url, opacity: toNum(obj.opacity, 1) });
   });
+  return layers;
 }
 
 /** Check if URL or blob is SVG (SVG not supported in render pipeline). */
@@ -132,10 +135,11 @@ export async function ensureDataUrl(url) {
 export async function ensureDataUrlsForLayers(layers) {
   const result = [];
   for (const layer of layers) {
-    if (layer.type !== 'image' || !layer.url) {
+    if (layer.type !== 'image') {
       result.push(layer);
       continue;
     }
+    if (!layer.url || String(layer.url).trim() === '') continue;
     if (layer.url.startsWith('data:image/png') || layer.url.startsWith('data:image/jpeg')) {
       result.push(layer);
       continue;

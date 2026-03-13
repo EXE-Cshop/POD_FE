@@ -3,11 +3,11 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import * as fabric from 'fabric';
 import { baseProductService, productVariantService, renderService, stickerService, designProductService, uploadImage, cartService, API_ORIGIN } from '../services/api';
 import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
+import { authStorage } from '../utils/authStorage';
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 800;
 const TSHIRT_IMAGES_FALLBACK = {
-  white: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772618145/MauAoTrang2_hd2m4x.jpg',
   black: 'https://res.cloudinary.com/di5j3h6wi/image/upload/v1772617682/b2a8c03b0b0761bb2bf0e4e6e7d5774b_nrk6ub.webp',
 };
 const PRINT_AREA_WIDTH = 305;
@@ -1009,7 +1009,7 @@ const DesignerPage = () => {
     }
     console.log('Matched variant:', matchedVariant, 'from', variants.length, 'variants');
 
-    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    const token = authStorage.getAccessToken();
     if (!token) {
       navigate('/home/login', { state: { from: location.pathname } });
       return;
@@ -1027,6 +1027,24 @@ const DesignerPage = () => {
       setRenderError(err.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
       return;
     }
+
+    const saveDesignToRef = () => {
+      const objs = canvas.getObjects().filter((o) => !o.data?.isTshirtBg && !o.data?.isPrintArea);
+      return JSON.stringify(objs.map((o) => o.toObject(['data'])));
+    };
+    if (designSide === 'front') frontDesignRef.current = saveDesignToRef();
+    else backDesignRef.current = saveDesignToRef();
+    const draft = {
+      frontDesign: frontDesignRef.current,
+      backDesign: backDesignRef.current,
+      designSide,
+      activeColor,
+      productId: productId || null,
+      selectedSize,
+      quantity,
+    };
+    sessionStorage.setItem(POD_DESIGNER_DRAFT, JSON.stringify(draft));
+    sessionStorage.setItem('pod_tryon_product_id', productId || '');
 
     navigate('/home/cart');
     setIsAdded(true);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 const UserRegister = () => {
     const navigate = useNavigate();
@@ -23,11 +24,9 @@ const UserRegister = () => {
         setIsLoading(true);
         try {
             const res = await api.post('/auth/register', { email, password, fullName });
-            const { accessToken, refreshToken } = res.data?.data || res.data || {};
+            const { accessToken } = res.data?.data || res.data || {};
             if (accessToken) {
-                localStorage.setItem('accessToken', accessToken);
-                localStorage.setItem('token', accessToken);
-                localStorage.setItem('refreshToken', refreshToken || '');
+                authStorage.setTokens(accessToken);
             }
             navigate('/home', { replace: true });
         } catch (err) {
