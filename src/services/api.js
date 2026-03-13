@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { authStorage } from '../utils/authStorage';
 
 const API_BASE_URL = 'http://localhost:8080/api/v1';
 /** Backend origin for normalizing relative image URLs (e.g. sticker/upload links) */
@@ -11,6 +12,7 @@ const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    withCredentials: true,
 });
 
 /** Upload image file - returns url string for preview */
@@ -24,10 +26,17 @@ export const uploadImage = async (file) => {
     return typeof data === 'object' && data?.url ? data.url : data;
 };
 
-// Add a request interceptor to add the token to the header
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach((prom) => (token ? prom.resolve(token) : prom.reject(error)));
+    failedQueue = [];
+};
+
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
+        const token = authStorage.getAccessToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -36,6 +45,48 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+        const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((token) => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return api(originalRequest);
+                });
+            }
+            originalRequest._retry = true;
+            isRefreshing = true;
+            try {
+                const res = await api.post('/auth/refresh', {});
+                const { accessToken } = res.data?.data || res.data || {};
+                if (accessToken) {
+                    authStorage.setAccessToken(accessToken);
+                    processQueue(null, accessToken);
+                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    return api(originalRequest);
+                }
+            } catch (refreshErr) {
+                processQueue(refreshErr, null);
+                authStorage.clearTokens();
+                if (typeof window !== 'undefined') window.location.href = '/home/login';
+                return Promise.reject(refreshErr);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+export const authService = {
+    logout: () => api.post('/auth/logout'),
+};
+
 export const adminService = {
     getStats: () => api.get('/admin/dashboard/stats'),
     getOrderDetail: (orderId) => api.get(`/admin/dashboard/orders/${orderId}`),
@@ -43,6 +94,7 @@ export const adminService = {
 
 export const orderService = {
     getOrders: (params) => api.get('/orders', { params }),
+    checkout: (data) => api.post(`${API_ORIGIN}/api/checkout`, data),
 };
 
 export const baseProductService = {
@@ -102,7 +154,7 @@ export const cartService = {
             backPrintUrl: backPrintUrl || undefined,
             customName: customName || undefined,
         }),
-    updateItem: (itemId, quantity) => api.put(`/cart/items/${itemId}`, { quantity }),
+    updateItem: (itemId, data) => api.put(`/cart/items/${itemId}`, typeof data === 'number' ? { quantity: data } : data),
     removeItem: (itemId) => api.delete(`/cart/items/${itemId}`),
 };
 

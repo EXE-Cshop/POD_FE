@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE_URL = 'http://localhost:8080';
+import { cartService, orderService } from '../services/api';
 
 const Checkout = () => {
     const navigate = useNavigate();
@@ -19,39 +18,22 @@ const Checkout = () => {
     const [paymentMethod, setPaymentMethod] = useState('COD');
     const [note, setNote] = useState('');
 
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('accessToken');
-        return {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-        };
-    };
-
     useEffect(() => {
         const fetchCart = async () => {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                navigate('/home/login');
-                return;
-            }
             try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/cart`, {
-                    headers: getAuthHeaders(),
-                });
-                if (response.status === 401 || response.status === 403) {
-                    navigate('/home/login');
-                    return;
-                }
-                if (!response.ok) throw new Error('Failed to load cart');
-                const result = await response.json();
-                const items = result.data?.items || [];
+                const res = await cartService.get();
+                const items = res.data?.data?.items || res.data?.items || [];
                 if (items.length === 0) {
                     navigate('/home/cart');
                     return;
                 }
                 setCartItems(items);
             } catch (err) {
-                setError(err.message);
+                if (err.response?.status === 401 || err.response?.status === 403) {
+                    navigate('/home/login');
+                } else {
+                    setError(err.message);
+                }
             } finally {
                 setLoading(false);
             }
@@ -73,31 +55,17 @@ const Checkout = () => {
         const fullAddress = buildShippingAddress();
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/checkout`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    shippingAddress: fullAddress,
-                    paymentMethod,
-                    note: note || undefined,
-                }),
+            const res = await orderService.checkout({
+                shippingAddress: fullAddress,
+                paymentMethod,
+                note: note || undefined,
             });
-
-            if (response.status === 401) {
-                navigate('/home/login');
-                return;
-            }
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => null);
-                throw new Error(errData?.message || 'Checkout failed');
-            }
-
-            const result = await response.json();
-            localStorage.setItem('lastOrder', JSON.stringify(result.data));
+            const orderData = res.data?.data || res.data;
+            if (orderData) localStorage.setItem('lastOrder', JSON.stringify(orderData));
             navigate('/home/order-success');
         } catch (err) {
-            setError(err.message);
+            if (err.response?.status === 401) navigate('/home/login');
+            else setError(err.response?.data?.message || err.message || 'Checkout failed');
         } finally {
             setSubmitting(false);
         }

@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { authStorage } from '../utils/authStorage';
+import { authService } from '../services/api';
 
 const UserProfile = () => {
     const navigate = useNavigate();
@@ -13,8 +15,11 @@ const UserProfile = () => {
         initials: 'JD'
     };
 
-    const handleLogout = () => {
-        // Placeholder for logout logic
+    const handleLogout = async () => {
+        try {
+            await authService.logout();
+        } catch (_) { /* ignore if already invalid */ }
+        authStorage.clearTokens();
         navigate('/home/login');
     };
 

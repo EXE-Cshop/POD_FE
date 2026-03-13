@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { baseProductService, productVariantService, cartService } from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
 
@@ -121,7 +122,7 @@ const ProductDetails = () => {
             setCartError('Vui lòng chọn màu sắc và kích cỡ.');
             return;
         }
-        const token = localStorage.getItem('token');
+        const token = authStorage.getAccessToken();
         if (!token) {
             navigate('/home/login', { state: { from: `/home/product/${id}` } });
             return;

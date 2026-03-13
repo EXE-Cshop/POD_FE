@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 const UserLogin = () => {
     const navigate = useNavigate();
@@ -17,11 +18,9 @@ const UserLogin = () => {
         const password = formData.get('password');
         try {
             const res = await api.post('/auth/login', { email, password });
-            const { accessToken, refreshToken } = res.data?.data || res.data || {};
+            const { accessToken } = res.data?.data || res.data || {};
             if (accessToken) {
-                localStorage.setItem('accessToken', accessToken);
-                localStorage.setItem('token', accessToken);
-                localStorage.setItem('refreshToken', refreshToken || '');
+                authStorage.setTokens(accessToken);
             }
             const from = location.state?.from || '/home';
             navigate(from, { replace: true });

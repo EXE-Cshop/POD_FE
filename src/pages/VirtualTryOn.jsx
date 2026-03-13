@@ -1,10 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { baseProductService, renderService } from '../services/api';
+import { baseProductService, productVariantService, renderService, cartService } from '../services/api';
 import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, PRINT_AREA_WIDTH_MM, PRINT_AREA_HEIGHT_MM } from '../utils/renderLayers';
+import { authStorage } from '../utils/authStorage';
 
 const API_BASE_URL = 'http://localhost:8080';
 const BASE_PRICE = 299000;
+// Match DesignerPage canvas & print area ratios for consistent render
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 800;
+const PRINT_AREA_WIDTH = 305;
+const PRINT_AREA_HEIGHT = 500;
+const PRINT_AREA_TOP_OFFSET = 55;
+const PRINT_AREA_LEFT = (CANVAS_WIDTH - PRINT_AREA_WIDTH) / 2;
+const PRINT_AREA_TOP = (CANVAS_HEIGHT - PRINT_AREA_HEIGHT) / 2 + PRINT_AREA_TOP_OFFSET;
 
 const SAMPLE_PRODUCTS = [
     {
@@ -276,7 +285,7 @@ const VirtualTryOn = () => {
         garmentFileRef.current = null;
     };
 
-    // Thêm vào giỏ sau khi Try-On AI: gọi render API + navigate cart (chỉ khi có design từ DesignerPage)
+    // Thêm vào giỏ sau khi Try-On AI: gọi render API + cart API (chỉ khi có design từ DesignerPage)
     const handleAddToCartFromTryOn = async () => {
         if (garmentSource !== 'editor') {
             navigate('/home/cart');
@@ -300,28 +309,58 @@ const VirtualTryOn = () => {
             setAddToCartError('Thiết kế trống. Vui lòng thêm ít nhất một phần tử.');
             return;
         }
+        const pid = draft.productId || returnProductId;
+        if (!pid) {
+            setAddToCartError('Không tìm thấy sản phẩm. Vui lòng thiết kế từ trang Designer với sản phẩm cụ thể.');
+            return;
+        }
+        const token = authStorage.getAccessToken();
+        if (!token) {
+            navigate('/home/login', { state: { from: location.pathname } });
+            return;
+        }
         setAddToCartLoading(true);
         setAddToCartError(null);
         try {
-            let product = null;
-            const pid = draft.productId || returnProductId;
-            if (pid) {
-                try {
-                    const res = await baseProductService.getById(pid);
-                    product = res.data?.data || res.data || null;
-                } catch (_) {}
+            const [productRes, variantsRes] = await Promise.all([
+                baseProductService.getById(pid),
+                productVariantService.getByBaseProductId(pid),
+            ]);
+            const product = productRes.data?.data || productRes.data || null;
+            const variantList = variantsRes.data?.data?.content || variantsRes.data?.data || [];
+            const variants = Array.isArray(variantList) ? variantList : [];
+            if (variants.length === 0) {
+                setAddToCartError('Sản phẩm chưa có phân loại (variant). Vui lòng liên hệ admin.');
+                return;
             }
+            const colorKeywords = (draft.activeColor || 'white') === 'white'
+                ? ['trắng', 'trang', 'white']
+                : ['đen', 'den', 'black'];
+            const matchColor = (v) => {
+                const cName = (v.colorName || v.color_name || '').toLowerCase();
+                return colorKeywords.some((kw) => cName.includes(kw));
+            };
+            const matchSize = (v) => (v.size || '').toUpperCase() === (draft.selectedSize || 'M').toUpperCase();
+            const matchedVariant = variants.find((v) => matchColor(v) && matchSize(v))
+                || variants.find((v) => matchColor(v))
+                || variants.find((v) => matchSize(v))
+                || variants[0];
+
             const getGarmentUrl = () => {
                 if (!product) return null;
                 const img = product.imageUrl || product.image_url;
                 if (img) return img;
-                const vs = product.variants || [];
-                const v = vs[0];
+                const v = variants[0];
                 return v?.frontImageUrl || v?.front_image_url || img;
             };
             const garmentBaseUrl = getGarmentUrl();
             const garmentUrl = garmentBaseUrl ? await ensureDataUrl(garmentBaseUrl) : null;
-            const printAreaRatios = { print_area_left_ratio: 0.25, print_area_top_ratio: 0.125, print_area_width_ratio: 0.5, print_area_height_ratio: 0.75 };
+            const printAreaRatios = {
+                print_area_left_ratio: PRINT_AREA_LEFT / CANVAS_WIDTH,
+                print_area_top_ratio: PRINT_AREA_TOP / CANVAS_HEIGHT,
+                print_area_width_ratio: PRINT_AREA_WIDTH / CANVAS_WIDTH,
+                print_area_height_ratio: PRINT_AREA_HEIGHT / CANVAS_HEIGHT,
+            };
 
             let frontPrintUrl = null;
             let backPrintUrl = null;
@@ -337,22 +376,15 @@ const VirtualTryOn = () => {
                 const res = await renderService.renderPrintFile({ width_mm: PRINT_AREA_WIDTH_MM, height_mm: PRINT_AREA_HEIGHT_MM, layers, dpi: 300, garment_image_url: garmentUrl || undefined, ...printAreaRatios });
                 backPrintUrl = res.data?.data?.file_url || res.data?.file_url;
             }
-            const basePrice = product?.basePrice != null ? Number(product.basePrice) : BASE_PRICE;
-            const cartItem = {
-                id: Date.now(),
-                productId: Number(pid) || 0,
-                title: product?.name ? `${product.name} - Custom Design` : 'Custom Tee - Try-On',
-                color: draft.activeColor === 'black' ? 'Black' : 'White',
-                size: draft.selectedSize || 'M',
-                quantity: draft.quantity ?? 1,
-                price: basePrice / 25000,
-                image: garmentImage,
-                isCustomDesign: true,
+
+            const productName = product?.name ? `${product.name} - Custom Design` : 'Custom Design';
+            const quantity = draft.quantity ?? 1;
+            await cartService.addItem(matchedVariant.id, quantity, {
                 frontPrintUrl: frontPrintUrl || undefined,
                 backPrintUrl: backPrintUrl || undefined,
-                designPayload: { frontDesign, backDesign, garmentColor: draft.activeColor || 'white' },
-            };
-            navigate('/home/cart', { state: { newDesignItem: cartItem } });
+                customName: productName,
+            });
+            navigate('/home/cart');
         } catch (err) {
             console.error('Add to cart from Try-On failed', err);
             setAddToCartError(err.response?.data?.message || err.message || 'Không thể thêm vào giỏ.');
