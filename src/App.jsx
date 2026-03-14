@@ -24,6 +24,9 @@ import UserProfile from './pages/UserProfile';
 import VirtualTryOn from './pages/VirtualTryOn';
 import Upload from './pages/Upload';
 import CommunityDesigns from './pages/CommunityDesigns';
+import CommunityFeed from './pages/CommunityFeed';
+import GiftUnboxing from './pages/GiftUnboxing';
+import CreatorDashboard from './pages/CreatorDashboard';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -47,6 +50,7 @@ function App() {
           <Route path="/register" element={<UserRegister />} />
         </Route>
         <Route path="/403" element={<Forbidden403 />} />
+        <Route path="/gift/:uuid" element={<GiftUnboxing />} />
         <Route path="/design/:productId" element={<DesignerPage />} />
         <Route path="/design" element={<DesignerPage />} />
 
@@ -63,6 +67,8 @@ function App() {
           <Route path="virtual-try-on" element={<VirtualTryOn />} />
           <Route path="upload" element={<Upload />} />
           <Route path="community-designs" element={<CommunityDesigns />} />
+          <Route path="feed" element={<CommunityFeed />} />
+          <Route path="creator-dashboard" element={<CreatorDashboard />} />
         </Route>
 
         {/* Admin routes protected by ProtectedRoute */}

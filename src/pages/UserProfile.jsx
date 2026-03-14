@@ -1,10 +1,14 @@
-import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { authStorage } from '../utils/authStorage';
-import { authService } from '../services/api';
+import { authService, giftService } from '../services/api';
 
 const UserProfile = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    
+    // Tab management
+    const [activeTab, setActiveTab] = useState(location.state?.tab || 'profile');
 
     // Mock user details
     const user = {
@@ -25,7 +29,6 @@ const UserProfile = () => {
 
     return (
         <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-10 min-h-screen text-slate-900 bg-background-light">
-            {/* Header section with back button */}
             <div className="flex items-center gap-4 mb-8">
                 <button
                     onClick={() => navigate('/home')}
@@ -42,7 +45,7 @@ const UserProfile = () => {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 {/* Left Sidebar Menu */}
                 <div className="lg:col-span-1">
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 font-display">
                         <div className="flex items-center gap-4 mb-8 pb-8 border-b border-slate-100">
                             <div className="size-14 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xl font-black">
                                 {user.initials}
@@ -54,10 +57,13 @@ const UserProfile = () => {
                         </div>
 
                         <nav className="space-y-2">
-                            <Link to="/home/profile" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-slate-50 text-primary font-bold transition-colors">
+                            <button 
+                                onClick={() => setActiveTab('profile')}
+                                className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-colors font-bold ${activeTab === 'profile' ? 'bg-slate-50 text-primary' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
                                 <span className="material-symbols-outlined text-[20px]">person</span>
                                 Profile Info
-                            </Link>
+                            </button>
                             <Link to="/home/my-orders" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">inventory_2</span>
                                 My Orders
@@ -65,10 +71,6 @@ const UserProfile = () => {
                             <Link to="/home" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">location_on</span>
                                 Saved Addresses
-                            </Link>
-                            <Link to="/home" className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-semibold transition-colors">
-                                <span className="material-symbols-outlined text-[20px]">credit_card</span>
-                                Payment Methods
                             </Link>
                             <button
                                 onClick={handleLogout}
@@ -83,57 +85,59 @@ const UserProfile = () => {
 
                 {/* Main Content Area */}
                 <div className="lg:col-span-3 space-y-6">
-                    {/* Personal Information */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 animate-fade-in-up">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold">Personal Information</h2>
-                            <button className="text-primary hover:text-primary/80 font-bold text-sm">Edit</button>
-                        </div>
+                    {activeTab === 'profile' && (
+                        <>
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 animate-fade-in-up">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold">Personal Information</h2>
+                                    <button className="text-primary hover:text-primary/80 font-bold text-sm">Edit</button>
+                                </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Full Name</label>
-                                <p className="font-semibold text-slate-900">{user.name}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Full Name</label>
+                                        <p className="font-semibold text-slate-900">{user.name}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                                        <p className="font-semibold text-slate-900">{user.email}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number</label>
+                                        <p className="font-semibold text-slate-900">{user.phone}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Password</label>
+                                        <p className="font-semibold text-slate-900">••••••••</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
-                                <p className="font-semibold text-slate-900">{user.email}</p>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number</label>
-                                <p className="font-semibold text-slate-900">{user.phone}</p>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Password</label>
-                                <p className="font-semibold text-slate-900">••••••••</p>
-                            </div>
-                        </div>
-                    </div>
 
-                    {/* Default Address */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold">Default Shipping Address</h2>
-                            <button className="text-primary hover:text-primary/80 font-bold text-sm">Manage Settings</button>
-                        </div>
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold">Default Shipping Address</h2>
+                                    <button className="text-primary hover:text-primary/80 font-bold text-sm">Manage Settings</button>
+                                </div>
 
-                        <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 flex gap-4">
-                            <div className="mt-1">
-                                <span className="material-symbols-outlined text-slate-400">home</span>
+                                <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 flex gap-4">
+                                    <div className="mt-1">
+                                        <span className="material-symbols-outlined text-slate-400">home</span>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 mb-1">{user.name}</h3>
+                                        <p className="text-slate-600 text-sm leading-relaxed mb-2">
+                                            123 Creative Studio Ave, Suite 4B
+                                            <br />
+                                            New York, NY 10012
+                                            <br />
+                                            United States
+                                        </p>
+                                        <p className="text-slate-500 text-sm">{user.phone}</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-bold text-slate-900 mb-1">{user.name}</h3>
-                                <p className="text-slate-600 text-sm leading-relaxed mb-2">
-                                    123 Creative Studio Ave, Suite 4B
-                                    <br />
-                                    New York, NY 10012
-                                    <br />
-                                    United States
-                                </p>
-                                <p className="text-slate-500 text-sm">{user.phone}</p>
-                            </div>
-                        </div>
-                    </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

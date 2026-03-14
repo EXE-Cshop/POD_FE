@@ -49,7 +49,7 @@ export const refreshSession = async () => {
     try {
         const res = await api.post('/auth/refresh', {});
         const data = res.data?.data || res.data;
-        
+
         if (data && data.user) {
             processQueue(null, data);
             return data;
@@ -80,7 +80,7 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
         const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
-        
+
         if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
             originalRequest._retry = true;
             try {
@@ -110,6 +110,7 @@ export const adminService = {
 
 export const orderService = {
     getOrders: (params) => api.get('/orders', { params }),
+    getMyOrders: (params) => api.get('/orders/my', { params }),
     checkout: (data) => api.post(`${API_ORIGIN}/api/checkout`, data),
 };
 
@@ -176,6 +177,49 @@ export const cartService = {
 
 export const chatBotService = {
     chat: (data) => api.post('/chatbot', data),
+};
+
+/**
+ * Design Feed API — tương ứng với GET /api/v1/designs/feed (Spring Boot Pageable).
+ * Backend trả về Page<Design> bọc trong ApiResponse.
+ */
+export const designFeedService = {
+    /**
+     * Lấy danh sách thiết kế công khai (isPublic=true) có phân trang.
+     * @param {number} page  - Số trang (0-indexed, mặc định 0)
+     * @param {number} size  - Số lượng mỗi trang (mặc định 10)
+     * @param {string} sort  - Trường sắp xếp (mặc định "createdAt,desc")
+     */
+    getPublicFeed: (page = 0, size = 10, sort = 'createdDate,desc') =>
+        api.get('/design-products/feed', { params: { page, size, sort } }),
+
+    /** Lấy chi tiết design theo ID (bao gồm canvasData JSON). */
+    getById: (id) => api.get(`/designs/${id}`),
+
+    /** Tạo design mới. */
+    create: (data) => api.post('/designs', data),
+};
+
+/**
+ * Gift (QR Gift Card) API — tương ứng với GiftController.
+ */
+export const giftService = {
+    /**
+     * Tạo gift message mới.
+     * @param {{ orderId: number, mediaUrl?: string, messageText?: string }} data
+     */
+    create: (data) => api.post('/gifts', data),
+
+    /**
+     * Lấy thông tin gift theo UUID (public, không cần auth).
+     * @param {string} uuid
+     */
+    getByUuid: (uuid) => api.get(`/gifts/${uuid}`),
+
+    /**
+     * Lấy danh sách gift của tôi.
+     */
+    getMyGifts: () => api.get('/gifts/my'),
 };
 
 export default api;

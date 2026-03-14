@@ -18,6 +18,15 @@ const Checkout = () => {
     const [paymentMethod, setPaymentMethod] = useState('COD');
     const [note, setNote] = useState('');
 
+    // QR Gift Features
+    const [isGift, setIsGift] = useState(false);
+    const [giftMessage, setGiftMessage] = useState('');
+    const [giftFile, setGiftFile] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isUploading, setIsUploading] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [showQrModal, setShowQrModal] = useState(false);
+
     useEffect(() => {
         const fetchCart = async () => {
             try {
@@ -74,7 +83,8 @@ const Checkout = () => {
     const subtotal = cartItems.reduce((sum, item) => sum + Number(item.subtotal || item.price * item.quantity), 0);
     const tax = subtotal * 0.08;
     const shipping = subtotal > 50 ? 0 : 5.99;
-    const total = subtotal + tax + shipping;
+    const giftFee = isGift ? 30000 / 25000 : 0; // Converting to USD mockly or just keeping it consistent
+    const total = subtotal + tax + shipping + giftFee;
 
     if (loading) {
         return (
@@ -238,6 +248,166 @@ const Checkout = () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* QR Gift Upsell Section - Redesigned */}
+                        <div className="pt-8 border-t border-slate-200">
+                            <div 
+                                className={`group relative p-6 rounded-[2rem] border-2 transition-all duration-500 overflow-hidden ${isGift ? 'border-primary bg-primary/5 shadow-2xl shadow-primary/10' : 'border-slate-200 bg-white hover:border-primary/30'}`}
+                                onClick={() => setIsGift(!isGift)}
+                            >
+                                {/* Background Accent */}
+                                {isGift && (
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[50px] -mr-16 -mt-16 rounded-full animate-pulse"></div>
+                                )}
+                                
+                                <div className="relative z-10 flex items-start justify-between gap-4 cursor-pointer">
+                                    <div className="flex items-center gap-5">
+                                        <div className={`size-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isGift ? 'bg-primary text-[#11221c] rotate-6' : 'bg-slate-100 text-slate-400 group-hover:bg-primary/20 group-hover:text-primary'}`}>
+                                            <span className="material-symbols-outlined text-3xl font-variation-fill">qr_code_2</span>
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h3 className="font-black text-xl text-slate-900">Nâng cấp Quà tặng</h3>
+                                                <span className="text-[10px] bg-[#11221c] text-primary px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">Premium</span>
+                                            </div>
+                                            <p className="text-sm text-slate-500 leading-tight max-w-md">Kèm thiệp in mã QR bí mật. Người nhận quét để mở video/audio chúc mừng đầy cảm xúc.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                        <div className="text-xl font-black text-slate-900">+30,000đ</div>
+                                        <div className={`size-7 rounded-full border-2 flex items-center justify-center transition-all ${isGift ? 'border-primary bg-primary text-[#11221c]' : 'border-slate-300 bg-white'}`}>
+                                            {isGift && <span className="material-symbols-outlined text-lg font-bold">check</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Expanded Gift Form */}
+                                {isGift && (
+                                    <div className="mt-8 space-y-6 pt-8 border-t border-primary/20 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                                        {/* File Upload Area */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-2">Upload Video hoặc Audio chúc mừng</label>
+                                            <div className="relative group">
+                                                <div className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 transition-all hover:border-primary/50 flex flex-col items-center justify-center bg-white cursor-pointer overflow-hidden">
+                                                    {previewUrl ? (
+                                                        <div className="w-full max-w-xs space-y-3">
+                                                            <video src={previewUrl} className="w-full aspect-video rounded-lg object-cover bg-black" />
+                                                            <button 
+                                                                onClick={() => {setPreviewUrl(null); setGiftFile(null);}}
+                                                                className="w-full py-2 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                            >
+                                                                Xóa file và chọn lại
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <span className="material-symbols-outlined text-4xl text-slate-300 group-hover:text-primary transition-colors">cloud_upload</span>
+                                                            <p className="text-sm font-bold text-slate-600 mt-2">Kéo thả hoặc Click để tải lên</p>
+                                                            <p className="text-[10px] text-slate-400 mt-1">MP4, MOV, MP3 (Tối đa 50MB)</p>
+                                                        </>
+                                                    )}
+                                                    <input 
+                                                        type="file" 
+                                                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                                                        onChange={(e) => {
+                                                            const file = e.target.files[0];
+                                                            if (file) {
+                                                                setGiftFile(file);
+                                                                setPreviewUrl(URL.createObjectURL(file));
+                                                                // Simulate Upload
+                                                                setIsUploading(true);
+                                                                setUploadProgress(0);
+                                                                const interval = setInterval(() => {
+                                                                    setUploadProgress(prev => {
+                                                                        if (prev >= 100) { clearInterval(interval); setIsUploading(false); return 100; }
+                                                                        return prev + 10;
+                                                                    });
+                                                                }, 200);
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                                
+                                                {/* Progress Bar Overlay */}
+                                                {isUploading && (
+                                                    <div className="absolute inset-x-0 -bottom-1">
+                                                        <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Message Textbox */}
+                                        <div>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <label className="text-sm font-bold text-slate-700">Thông điệp ý nghĩa</label>
+                                                <span className="text-[10px] text-slate-400 font-bold uppercase">{giftMessage.length}/200 ký tự</span>
+                                            </div>
+                                            <textarea
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none h-24 text-sm"
+                                                placeholder="Nhập lời nhắn gửi đến người yêu thương..."
+                                                maxLength={200}
+                                                value={giftMessage}
+                                                onChange={(e) => setGiftMessage(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <button 
+                                            type="button"
+                                            className="w-full py-4 bg-[#11221c] text-white rounded-2xl font-black text-sm hover:brightness-125 transition-all flex items-center justify-center gap-3 shadow-xl shadow-slate-200"
+                                            onClick={() => setShowQrModal(true)}
+                                            disabled={!giftMessage && !giftFile}
+                                        >
+                                            <span className="material-symbols-outlined text-lg text-primary">qr_code</span>
+                                            Xem trước mã QR quà tặng
+                                        </button>
+                                        <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mã QR này sẽ được in trực tiếp lên thiệp vật lý</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* QR PREVIEW MODAL */}
+                        {showQrModal && (
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#11221c]/90 backdrop-blur-xl p-4 animate-fade-in" onClick={() => setShowQrModal(false)}>
+                                <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 flex flex-col items-center text-center shadow-2xl scale-100 transition-transform" onClick={(e) => e.stopPropagation()}>
+                                    <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6">
+                                        <span className="material-symbols-outlined text-4xl">contactless</span>
+                                    </div>
+                                    <h3 className="text-2xl font-black text-slate-900 mb-2">Quét thử mã QR</h3>
+                                    <p className="text-slate-500 text-sm mb-8">Dùng điện thoại quét mã dưới đây để xem trước trải nghiệm thiệp chúc mừng điện tử.</p>
+                                    
+                                    <div className="relative p-6 bg-slate-50 rounded-[2rem] border-2 border-slate-100 mb-6">
+                                        {/* Corner Accents */}
+                                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -ml-1 -mt-1 rounded-tl-xl"></div>
+                                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary -mr-1 -mt-1 rounded-tr-xl"></div>
+                                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -ml-1 -mb-1 rounded-bl-xl"></div>
+                                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary -mr-1 -mb-1 rounded-br-xl"></div>
+                                        
+                                        <img 
+                                            src={`https://quickchart.io/qr?text=${encodeURIComponent('https://c-shop.vn/gift/demo-emotional-card')}&size=300&light=ffffff&dark=000000`} 
+                                            alt="Preview QR Code"
+                                            className="w-48 h-48 object-contain relative z-20"
+                                        />
+                                    </div>
+
+                                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 mb-8">
+                                        <p className="text-[10px] text-amber-700 font-bold leading-tight">
+                                            💡 MẸO: Để quét thử chính xác trang web đang chạy trên máy bạn, hãy đổi 'localhost' thành địa chỉ IP local (VD: 192.168.1.x) hoặc dùng ngrok.
+                                        </p>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => setShowQrModal(false)}
+                                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all"
+                                    >
+                                        Đóng lại
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Step 2: Payment */}
                         {step === 2 && (

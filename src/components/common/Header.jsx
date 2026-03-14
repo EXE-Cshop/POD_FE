@@ -52,7 +52,7 @@ const Header = ({ children }) => {
                     <nav className="hidden lg:flex items-center gap-6 mr-4">
                         <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home">Home</Link>
                         <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/catalog">Catalog</Link>
-                        <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/community-designs">
+                        <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/feed">
                             Thiết kế cộng đồng
                         </Link>
                     </nav>

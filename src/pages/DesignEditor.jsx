@@ -1,7 +1,7 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import React, { useState, useRef, useEffect } from 'react';
 import html2canvas from 'html2canvas';
-import { baseProductService } from '../services/api';
+import { baseProductService, designFeedService } from '../services/api';
 import Header from '../components/common/Header';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
@@ -9,6 +9,7 @@ const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf1
 const DesignEditor = () => {
     const navigate = useNavigate();
     const { productId } = useParams();
+    const location = useLocation();
     const [zoom, setZoom] = useState(85);
     const [isAdded, setIsAdded] = useState(false);
     const [showToast, setShowToast] = useState(false);
@@ -16,6 +17,13 @@ const DesignEditor = () => {
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showResetModal, setShowResetModal] = useState(false);
+    const [isRemixing, setIsRemixing] = useState(false);
+    const [sharedDesign, setSharedDesign] = useState(null);
+
+    // New State for Publishing
+    const [shareToCommunity, setShareToCommunity] = useState(true);
+    const [copyrightCommit, setCopyrightCommit] = useState(false);
+
     const mockupRef = useRef(null);
 
     // Fetch product data
@@ -37,6 +45,24 @@ const DesignEditor = () => {
         };
         fetchProduct();
     }, [productId]);
+
+    // Remix logic: Fetch shared design if id exists in state
+    useEffect(() => {
+        const sharedDesignId = location.state?.sharedDesignId;
+        if (sharedDesignId) {
+            setIsRemixing(true);
+            designFeedService.getById(sharedDesignId)
+                .then(res => {
+                    const data = res.data?.data || res.data;
+                    setSharedDesign(data);
+                    // In a real Fabric.js editor, we would do:
+                    // canvas.loadFromJSON(data.canvasData, canvas.renderAll.bind(canvas));
+                    console.log('Remixing design:', data.name);
+                })
+                .catch(err => console.error('Failed to load shared design:', err))
+                .finally(() => setIsRemixing(false));
+        }
+    }, [location.state]);
 
     const productName = product?.name || 'Custom Product';
     const productImage = product?.imageUrl || DEFAULT_IMAGE;
@@ -276,6 +302,54 @@ const DesignEditor = () => {
                             </span>
                             <span>{isAdded ? 'Design Finished' : 'Add to Cart'}</span>
                         </button>
+
+                        {/* Remix / Shared Info Badge */}
+                        {sharedDesign && (
+                            <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3">
+                                <div className="size-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-blue-500 text-sm">auto_fix_high</span>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-[10px] text-blue-400 font-bold uppercase">Remixing</p>
+                                    <p className="text-xs font-bold text-slate-700 truncate">{sharedDesign.name}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Publish Options */}
+                        <div className="p-4 bg-slate-100/50 rounded-xl border border-slate-200 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-sm text-primary">public</span>
+                                    <span className="text-xs font-bold text-slate-700">Chia sẻ thiết kế</span>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={shareToCommunity}
+                                        onChange={() => setShareToCommunity(!shareToCommunity)}
+                                    />
+                                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+
+                            {shareToCommunity && (
+                                <div className="flex items-start gap-2 animate-fade-in">
+                                    <input
+                                        type="checkbox"
+                                        id="copyright"
+                                        className="mt-0.5 rounded border-slate-300 text-primary focus:ring-primary w-3.5 h-3.5"
+                                        checked={copyrightCommit}
+                                        onChange={() => setCopyrightCommit(!copyrightCommit)}
+                                    />
+                                    <label htmlFor="copyright" className="text-[10px] text-slate-500 leading-tight">
+                                        Tôi cam kết sở hữu bản quyền hình ảnh và đồng ý chia sẻ với cộng đồng.
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="flex gap-2">
                             <button
                                 onClick={handleTryOn}

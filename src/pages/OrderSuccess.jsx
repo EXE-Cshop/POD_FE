@@ -109,7 +109,7 @@ const OrderSuccess = () => {
                         </div>
                         <div>
                             <h4 className="font-bold text-slate-900 text-sm">Printing & Packing</h4>
-                            <p className="text-sm text-slate-500 mt-1">Our team is preparing your custom items. This usually takes 1-2 business days.</p>
+                            <p className="text-sm text-slate-500 mt-1">Our team is preparing your custom items. This usually takes 1-2 business days house.</p>
                         </div>
                     </div>
                 </div>
