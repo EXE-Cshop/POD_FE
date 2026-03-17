@@ -29,8 +29,30 @@ const GiftUnboxing = () => {
     height: window.innerHeight,
   });
 
-  // ─── Fetch gift data ─────────────────────────────────────────────
+  // ─── Fetch gift data / Preview Mode ──────────────────────────────
   useEffect(() => {
+    // Check for query parameters (Preview Mode)
+    const params = new URLSearchParams(window.location.search);
+    const previewName = params.get('n');
+    const previewMsg = params.get('m');
+    const previewTheme = params.get('t');
+    const previewPhoto = params.get('p');
+    const previewVideo = params.get('v');
+
+    if (previewName || previewMsg || previewTheme) {
+      setGift({
+        recipientName: previewName,
+        messageText: previewMsg,
+        themeName: previewTheme,
+        photoUrl: previewPhoto,
+        videoUrl: previewVideo,
+        mediaUrl: previewVideo // backward compat with existing component logic
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Normal Mode: Fetch from backend by UUID
     giftService
       .getByUuid(uuid)
       .then((res) => {
@@ -98,7 +120,12 @@ const GiftUnboxing = () => {
       {[...Array(12)].map((_, i) => (
         <motion.span
           key={i}
-          className="absolute text-rose-300 text-2xl"
+          className="absolute material-symbols-outlined"
+          style={{ 
+            color: gift?.themeName === 'Modern Minimal' ? '#13b9a5' : '#FF6B6B',
+            fontSize: '24px',
+            top: -100 // Start off-screen
+          }}
           initial={{
             x: Math.random() * windowSize.width,
             y: windowSize.height + 100,
@@ -106,100 +133,91 @@ const GiftUnboxing = () => {
             scale: 0.5 + Math.random()
           }}
           animate={{
-            y: -100,
+            y: -200,
             rotate: Math.random() * 360 + 360,
           }}
           transition={{
-            duration: 10 + Math.random() * 20,
+            duration: 15 + Math.random() * 20,
             repeat: Infinity,
             ease: "linear",
             delay: Math.random() * 10
           }}
         >
-          favorite
+          {gift?.themeName === 'Luxury Gold' ? 'award_star' : 'favorite'}
         </motion.span>
       ))}
     </div>
   );
 
   // ─── Main UI ──────────────────────────────────────────────────────
+  const themeData = {
+    'Modern Minimal': { gradient: 'from-rose-50 to-amber-50', primary: 'rose-500' },
+    'Luxury Gold': { gradient: 'from-amber-50 to-orange-100', primary: 'amber-600' },
+    'Midnight Blue': { gradient: 'from-slate-900 to-slate-800', primary: 'blue-400', isDark: true },
+    'Custom Photo': { gradient: 'from-slate-50 to-slate-100', primary: 'primary' }
+  };
+  const currentTheme = themeData[gift?.themeName] || themeData['Modern Minimal'];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-rose-50 via-rose-50/50 to-white flex flex-col items-center justify-center px-4 py-8 overflow-hidden relative font-display">
+    <div className={`min-h-screen flex flex-col items-center justify-center px-4 py-8 overflow-hidden relative font-display bg-gradient-to-b ${currentTheme.gradient}`}>
       <FloatingHearts />
+      
+      {/* Background Photo (for Custom Photo theme) */}
+      {gift?.themeName === 'Custom Photo' && gift?.photoUrl && (
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-20 grayscale-[0.3]" 
+          style={{ backgroundImage: `url('${gift.photoUrl}')` }}
+        />
+      )}
+
       {/* ── Confetti ────────────────────────────────────────────── */}
       {showConfetti && (
         <Confetti
           width={windowSize.width}
           height={windowSize.height}
-          numberOfPieces={250}
+          numberOfPieces={300}
           recycle={false}
-          gravity={0.15}
-          colors={['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF6FB5', '#C084FC']}
+          gravity={0.12}
+          colors={[
+            gift?.themeName === 'Luxury Gold' ? '#D4AF37' : '#13b9a5', 
+            '#FFD93D', '#FF6B6B', '#4D96FF', '#ffffff'
+          ]}
         />
       )}
 
-      {/* ── Envelope (trước khi mở) ────────────────────────────── */}
       <AnimatePresence>
         {!isOpened && (
           <motion.div
             key="envelope"
             initial={{ scale: 0.8, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 1.1, opacity: 0, y: -60, rotateX: 45 }}
+            exit={{ scale: 1.1, opacity: 0, y: -100, rotateX: 45 }}
             transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="cursor-pointer select-none"
+            className="cursor-pointer select-none relative"
             onClick={handleOpen}
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.05, rotate: 2 }}
             whileTap={{ scale: 0.95 }}
           >
-            {/* Envelope SVG */}
-            <div className="relative w-72 h-52 sm:w-80 sm:h-56">
-              {/* Envelope body */}
-              <div className="absolute inset-0 bg-gradient-to-br from-rose-400 to-pink-500 rounded-2xl shadow-2xl shadow-rose-300/50 overflow-hidden">
-                {/* Envelope flap (tam giác phía trên) */}
-                <div className="absolute top-0 left-0 right-0">
-                  <svg viewBox="0 0 320 100" className="w-full">
-                    <polygon
-                      points="0,0 160,80 320,0"
-                      fill="url(#flapGradient)"
-                      stroke="rgba(255,255,255,0.3)"
-                      strokeWidth="1"
-                    />
-                    <defs>
-                      <linearGradient id="flapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#E11D48" />
-                        <stop offset="100%" stopColor="#DB2777" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
-                {/* Nội dung bên trong envelope */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pt-8">
-                  <span className="text-4xl mb-2">🎁</span>
-                  <p className="text-white/90 font-bold text-sm">Bạn nhận được quà!</p>
-                  <p className="text-white/60 text-xs mt-1">Nhấn để mở</p>
-                </div>
-                {/* Dấu sáp niêm phong */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                  <motion.div
-                    className="size-10 bg-yellow-400 rounded-full shadow-lg flex items-center justify-center"
-                    animate={{ rotate: [0, 5, -5, 0] }}
-                    transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-                  >
-                    <span className="text-yellow-800 text-lg">★</span>
-                  </motion.div>
-                </div>
+            {/* Background Glow */}
+            <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full scale-75 animate-pulse"></div>
+
+            {/* Envelope Card */}
+            <div className="relative w-80 h-60 bg-white rounded-[2rem] border-2 border-primary/20 shadow-2xl overflow-hidden flex flex-col items-center justify-center p-8">
+              <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6">
+                <span className="material-symbols-outlined text-4xl animate-bounce">mail</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900 mb-1 italic">Dành cho bạn...</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Chạm để mở thiệp</p>
+              
+              {/* Seal Accent */}
+              <div className="absolute bottom-6 right-6 opacity-20">
+                 <span className="material-symbols-outlined text-4xl text-primary font-variation-fill">qr_code_2</span>
               </div>
             </div>
 
-            {/* Floating hint */}
-            <motion.p
-              className="text-center text-rose-400/80 text-xs font-medium mt-6"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-            >
-              Chạm vào phong bì để mở 💌
-            </motion.p>
+            {/* Floating particles (CSS) */}
+            <div className="absolute -top-4 -right-4 size-8 bg-amber-200 rounded-full blur-xl animate-pulse"></div>
+            <div className="absolute -bottom-4 -left-4 size-12 bg-primary/20 rounded-full blur-xl animate-pulse delay-700"></div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -250,28 +268,30 @@ const GiftUnboxing = () => {
             {/* Tin nhắn chúc mừng */}
             {gift?.messageText && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 1.2, duration: 0.6 }}
-                className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 sm:p-8 shadow-lg border border-rose-100"
+                className="bg-white rounded-[2.5rem] p-8 sm:p-10 shadow-2xl border border-slate-100 relative group overflow-hidden"
               >
-                <div className="flex justify-center mb-4">
-                  <div className="flex gap-1">
-                    {['💖', '✨', '💖'].map((emoji, i) => (
-                      <motion.span
-                        key={i}
-                        className="text-lg"
-                        animate={{ y: [0, -6, 0] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.2 }}
-                      >
-                        {emoji}
-                      </motion.span>
-                    ))}
+                {/* Decorative Pattern */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-125"></div>
+                
+                <div className="relative z-10">
+                  <div className="flex flex-col items-center gap-2 mb-6">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Message for</span>
+                    <h2 className="text-xl font-black text-slate-900 border-b-2 border-primary/20 pb-1">{gift.recipientName || 'Bạn'}</h2>
+                  </div>
+
+                  <p className="text-slate-700 text-lg sm:text-xl leading-relaxed italic font-medium">
+                    "{gift.messageText}"
+                  </p>
+
+                  <div className="mt-8 flex justify-center items-center gap-4">
+                     <div className="h-px w-8 bg-slate-200"></div>
+                     <span className="material-symbols-outlined text-primary text-xl">favorite</span>
+                     <div className="h-px w-8 bg-slate-200"></div>
                   </div>
                 </div>
-                <p className="text-slate-700 text-base sm:text-lg leading-relaxed whitespace-pre-wrap font-medium">
-                  {gift.messageText}
-                </p>
               </motion.div>
             )}
 

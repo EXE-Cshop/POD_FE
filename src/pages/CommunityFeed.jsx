@@ -20,7 +20,7 @@ const MASONRY_BREAKPOINTS = {
 const PAGE_SIZE = 12;
 
 const TAGS = [
-  '#Tất cả', '#Cyberpunk', '#Vintage', '#Minimalist', '#FPTU', '#Retro', '#Anime', '#Streetwear', '#Art', '#Modern'
+  '#Tất cả', '#Cyberpunk', '#Retro', '#Minimalist', '#Vintage', '#Anime', '#Streetwear', '#Modern', '#FPTU', '#Art'
 ];
 
 const CommunityFeed = () => {
@@ -127,7 +127,7 @@ const CommunityFeed = () => {
             key={tag}
             onClick={() => setSelectedTag(tag)}
             className={`px-5 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all ${selectedTag === tag
-              ? 'bg-primary text-[#11221c] shadow-lg shadow-primary/20'
+              ? 'bg-primary text-white shadow-lg shadow-primary/20'
               : 'bg-white border border-slate-200 text-slate-500 hover:border-primary/50'
               }`}
           >
@@ -220,59 +220,66 @@ const DesignCard = ({ design, onRemix, onClick }) => {
 
   return (
     <div className="mb-6 group cursor-pointer" onClick={onClick}>
-      <div className="relative bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/30 transition-all duration-300">
+      <div className="relative bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/40 transition-all duration-300">
         {/* Preview Image */}
-        <div className="relative bg-slate-100 overflow-hidden">
+        <div className="relative bg-slate-100 overflow-hidden aspect-[4/5]">
           {design.previewImageUrl ? (
             <>
-              {/* Skeleton placeholder */}
               {!imgLoaded && (
-                <div className="w-full aspect-[3/4] bg-slate-100 animate-pulse" />
+                <div className="w-full h-full bg-slate-100 animate-pulse" />
               )}
               <img
                 src={design.previewImageUrl}
                 alt={design.name || 'Design preview'}
-                className={`w-full object-cover transition-opacity duration-500 ${imgLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
+                className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-110 ${imgLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'}`}
                 onLoad={() => setImgLoaded(true)}
                 loading="lazy"
               />
             </>
           ) : (
-            <div className="w-full aspect-[3/4] flex items-center justify-center">
-              <span className="material-symbols-outlined text-6xl text-slate-300">image</span>
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="material-symbols-outlined text-6xl text-slate-300">palette</span>
             </div>
           )}
 
-          {/* Hover overlay với nút Remix */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-end p-4">
+          {/* Featured Badge (if applicable) */}
+          <div className="absolute top-3 right-3">
+             <div className="bg-white/80 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-bold text-primary uppercase tracking-wider border border-primary/20">Featured</div>
+          </div>
+        </div>
+
+        {/* Card Info */}
+        <div className="p-4 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-full bg-slate-100 border border-slate-100 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-sm">person</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-900 truncate max-w-[100px]">{design.creatorName || 'Anonymous'}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Creator</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <span className="material-symbols-outlined text-[20px] hover:text-rose-500 transition-colors">favorite</span>
+              <span className="text-xs font-bold">{Math.floor(Math.random() * 100)}</span>
+            </div>
+          </div>
+
+          <div className="relative group/btn">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onRemix(design);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-[#11221c] font-bold rounded-xl text-sm hover:brightness-110 transition-all shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300"
+              className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
             >
-              <span className="material-symbols-outlined text-lg">auto_fix_high</span>
-              Remix
+              <span className="material-symbols-outlined text-[20px]">shopping_cart_checkout</span>
+              Use this design
             </button>
-          </div>
-        </div>
-
-        {/* Card Info */}
-        <div className="p-4">
-          <h3 className="font-bold text-slate-900 truncate text-sm group-hover:text-primary transition-colors">
-            {design.name || 'Untitled Design'}
-          </h3>
-          <div className="flex items-center gap-2 mt-2">
-            <div className="size-6 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center">
-              <span className="material-symbols-outlined text-xs text-primary">person</span>
-            </div>
-            <span className="text-xs text-slate-500 truncate">
-              {design.creatorName || 'Ẩn danh'}
-            </span>
-            <div className="ml-auto flex items-center gap-1 text-slate-400">
-              <span className="material-symbols-outlined text-xs">favorite</span>
-              <span className="text-[10px] font-bold">{Math.floor(Math.random() * 100)}</span>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-white border border-slate-200 rounded-lg text-[10px] text-center text-slate-600 opacity-0 group-hover/btn:opacity-100 pointer-events-none transition-all shadow-xl z-20">
+              <span className="text-primary font-bold">Earn points!</span> Creator will be notified and earn reward points!
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white"></div>
             </div>
           </div>
         </div>

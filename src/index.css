@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: Manrope, sans-serif;
+  --font-display: 'Plus Jakarta Sans', Manrope, sans-serif;
 
-  --color-primary: #13eca4;
-  --color-background-light: #f6f8f7;
-  --color-background-dark: #10221c;
+  --color-primary: #13b9a5;
+  --color-background-light: #ffffff;
+  --color-background-dark: #11211f;
 
   --animate-fade-in: fade-in 0.5s ease-out forwards;
   --animate-fade-in-up: fade-in-up 0.5s ease-out forwards;

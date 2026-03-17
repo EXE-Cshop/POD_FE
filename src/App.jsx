@@ -50,6 +50,7 @@ function App() {
           <Route path="/register" element={<UserRegister />} />
         </Route>
         <Route path="/403" element={<Forbidden403 />} />
+        <Route path="/gift/preview" element={<GiftUnboxing />} />
         <Route path="/gift/:uuid" element={<GiftUnboxing />} />
         <Route path="/design/:productId" element={<DesignerPage />} />
         <Route path="/design" element={<DesignerPage />} />

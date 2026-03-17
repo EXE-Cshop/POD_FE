@@ -206,7 +206,7 @@ export const designFeedService = {
 export const giftService = {
     /**
      * Tạo gift message mới.
-     * @param {{ orderId: number, mediaUrl?: string, messageText?: string }} data
+     * @param {{ orderId: number, recipientName?: string, messageText?: string, themeName?: string, photoUrl?: string, videoUrl?: string }} data
      */
     create: (data) => api.post('/gifts', data),
 

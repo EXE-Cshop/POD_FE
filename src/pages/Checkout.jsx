@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { cartService, orderService } from '../services/api';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { cartService, orderService, giftService } from '../services/api';
+import GiftUpgradeModal from '../components/GiftUpgradeModal';
 
 const Checkout = () => {
     const navigate = useNavigate();
-    const [step, setStep] = useState(1);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const step = parseInt(searchParams.get('step') || '1', 10);
+
+    const setStep = (newStep) => {
+        setSearchParams({ step: newStep });
+    };
+
     const [cartItems, setCartItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -18,14 +25,28 @@ const Checkout = () => {
     const [paymentMethod, setPaymentMethod] = useState('COD');
     const [note, setNote] = useState('');
 
-    // QR Gift Features
+    // QR Gift Features (Enhanced from Stitch)
     const [isGift, setIsGift] = useState(false);
+    const [giftStep, setGiftStep] = useState(1);
+    const [recipientName, setRecipientName] = useState('');
     const [giftMessage, setGiftMessage] = useState('');
+    const [selectedTheme, setSelectedTheme] = useState('Modern Minimal');
     const [giftFile, setGiftFile] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null);
+    const [photoUrl, setPhotoUrl] = useState(null);
+    const [videoUrl, setVideoUrl] = useState(null);
     const [showQrModal, setShowQrModal] = useState(false);
+    const [showGiftModal, setShowGiftModal] = useState(false);
+
+    const THEMES = [
+        { name: 'Modern Minimal', color: '#13b9a5', type: 'minimal' },
+        { name: 'Festive Floral', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDxTzthpeKldR46pYXu-UVgOtUoYd5QLWu8pfhni27z7W3VcQTVlboxHgfo0NtsgSL7cAuxXUblaOiwh8W3wmjI4yOgKbQXu4Fz-48nAx13_jFTcXthqPS0CzaFAEBZoyn5cb-IBs2Kl6cxjJwLyN0gN5LCnQWoai5pyYASrL8xCtUdnf4FrnesVwSCXR27HZtpYcyneFcCMdWrpbgOU0cIHkrGP23yXPIAaLwn4zHIR10OgQG03vC6bMMdjd42I4cg5ulmALs8vA' },
+        { name: 'Ocean Breeze', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAu3AASf9IglX9y4YK5gGU-vyQXHPyvrz0BBVmHejl4K40-F5t-2hpJ8Nj-79V3VBjLbosS1YJLN_kaTO81g17NKv44ORaoW9uxq7_sKTv8VK12ZasPfGKmif88cvt99cdINUK3UXWq7TNFAS-6Bn9WitZ5OMYj5UFNipYWE_UATcF58hIwqNnZINnsM8Ub5bR4RgWU3fZSt81jgMn2q01T0tK8bWpAeARJZQXxAtYIoT1Nayf01PQz83s7C_5gS_xvZoumdUYoEA' },
+        { name: 'Gold Geometric', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAj3G3EZCeurThYDIbCzwn3YcWMjRF6GJp-xqJNqrH99cPw_Zl56HyD6OmzbqhGUbsFERNuCMIB5cb8ziKTAhMsS_Ya9KSV3BChNBom7kgci8qSbN4YADakuUwDLfBqb5OHTXo8UT_xen189q5WS8RZQgp67aLaVTGr9zN6_qBnhXNKiLjk-HW0mhoCMiHOKZmBucPnhnHZC8K0x7li1dvC-pvkad56HRIp-6Xf_g9CEsTR2jy4_ON6fZPNMwPG45rg0V7zvdgIfw' },
+        { name: 'Artist Soul', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAm6h4lgS_yTJGtSxxsfg8iCYbJy-hKPsnKs1mBY8vEoNk8JNU3xvI_zmC-0jyNTrSx1VfWEdDiipJyTD8rosjWqyOcF9iHqw1qwfQwGQVFdbsaTKHasjhGG6gc695Y9hc1HjZ-tRU-w5Z9evrRb-3prsDonIibNxpuq_DKNvXDP1G7yqgejBtjOkAXVI5nQkpRz-VVh5GIKxu5k_X2f8ygH8iMYbJcRaJrTzv-EjdXOxpgtfnpFsPEMh3lpnAoqle6mUwOdKSg3Q' }
+    ];
 
     useEffect(() => {
         const fetchCart = async () => {
@@ -50,6 +71,11 @@ const Checkout = () => {
         fetchCart();
     }, []);
 
+    // Auto-scroll to top on step change
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [step]);
+
     const buildShippingAddress = () => {
         const { street, apt, city, state, zip } = addressFields;
         const parts = [street, apt, city, state, zip].filter(Boolean);
@@ -70,6 +96,25 @@ const Checkout = () => {
                 note: note || undefined,
             });
             const orderData = res.data?.data || res.data;
+            
+            // If it's a gift, create the gift record linked to this order
+            if (isGift && orderData?.id) {
+                try {
+                    await giftService.create({
+                        orderId: orderData.id,
+                        recipientName: recipientName,
+                        messageText: giftMessage,
+                        themeName: selectedTheme,
+                        photoUrl: photoUrl,
+                        videoUrl: videoUrl
+                    });
+                } catch (giftErr) {
+                    console.error('Failed to create gift record:', giftErr);
+                    // We don't block the whole checkout if only the gift record fails, 
+                    // but we might want to log it or warn the user.
+                }
+            }
+
             if (orderData) localStorage.setItem('lastOrder', JSON.stringify(orderData));
             navigate('/home/order-success');
         } catch (err) {
@@ -126,117 +171,161 @@ const Checkout = () => {
 
                     <form onSubmit={handlePlaceOrder} className="space-y-10">
                         {/* Step 1: Contact & Shipping */}
-                        <div className={`space-y-6 ${step !== 1 && 'opacity-50 pointer-events-none'}`}>
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-2xl font-black text-slate-900">Contact Information</h2>
-                                {step === 2 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setStep(1)}
-                                        className="text-primary font-bold text-sm hover:underline"
-                                    >
-                                        Edit
-                                    </button>
-                                )}
-                            </div>
+                        {step === 1 && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-black text-slate-900">Contact Information</h2>
+                                </div>
 
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-                                    <input
-                                        type="email"
-                                        required
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-400"
-                                        placeholder="you@example.com"
-                                    />
-                                </div>
-                            </div>
-
-                            <h2 className="text-2xl font-black text-slate-900 pt-6">Shipping Address</h2>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">First Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={addressFields.firstName}
-                                        onChange={(e) => setAddressFields(prev => ({ ...prev, firstName: e.target.value }))}
-                                        className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={addressFields.lastName}
-                                        onChange={(e) => setAddressFields(prev => ({ ...prev, lastName: e.target.value }))}
-                                        className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Street Address</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={addressFields.street}
-                                        onChange={(e) => setAddressFields(prev => ({ ...prev, street: e.target.value }))}
-                                        className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                                        placeholder="123 Main St"
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">Apartment, suite, etc. (optional)</label>
-                                    <input
-                                        type="text"
-                                        value={addressFields.apt}
-                                        onChange={(e) => setAddressFields(prev => ({ ...prev, apt: e.target.value }))}
-                                        className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                                        placeholder="Apt 4B"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-1">City</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={addressFields.city}
-                                        onChange={(e) => setAddressFields(prev => ({ ...prev, city: e.target.value }))}
-                                        className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-1">State</label>
-                                        <select
-                                            required
-                                            value={addressFields.state}
-                                            onChange={(e) => setAddressFields(prev => ({ ...prev, state: e.target.value }))}
-                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all bg-white"
-                                        >
-                                            <option value="">Select...</option>
-                                            <option value="CA">CA</option>
-                                            <option value="NY">NY</option>
-                                            <option value="TX">TX</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-1">ZIP Code</label>
+                                        <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
                                         <input
-                                            type="text"
+                                            type="email"
                                             required
-                                            value={addressFields.zip}
-                                            onChange={(e) => setAddressFields(prev => ({ ...prev, zip: e.target.value }))}
-                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-400"
+                                            placeholder="you@example.com"
                                         />
                                     </div>
                                 </div>
-                            </div>
 
-                            {step === 1 && (
+                                <h2 className="text-2xl font-black text-slate-900 pt-6">Shipping Address</h2>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-1">First Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={addressFields.firstName}
+                                            onChange={(e) => setAddressFields(prev => ({ ...prev, firstName: e.target.value }))}
+                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={addressFields.lastName}
+                                            onChange={(e) => setAddressFields(prev => ({ ...prev, lastName: e.target.value }))}
+                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-slate-700 mb-1">Street Address</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={addressFields.street}
+                                            onChange={(e) => setAddressFields(prev => ({ ...prev, street: e.target.value }))}
+                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                            placeholder="123 Main St"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-slate-700 mb-1">Apartment, suite, etc. (optional)</label>
+                                        <input
+                                            type="text"
+                                            value={addressFields.apt}
+                                            onChange={(e) => setAddressFields(prev => ({ ...prev, apt: e.target.value }))}
+                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                            placeholder="Apt 4B"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-1">City</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={addressFields.city}
+                                            onChange={(e) => setAddressFields(prev => ({ ...prev, city: e.target.value }))}
+                                            className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-1">State</label>
+                                            <select
+                                                required
+                                                value={addressFields.state}
+                                                onChange={(e) => setAddressFields(prev => ({ ...prev, state: e.target.value }))}
+                                                className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all bg-white"
+                                            >
+                                                <option value="">Select...</option>
+                                                <option value="CA">CA</option>
+                                                <option value="NY">NY</option>
+                                                <option value="TX">TX</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-1">ZIP Code</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={addressFields.zip}
+                                                onChange={(e) => setAddressFields(prev => ({ ...prev, zip: e.target.value }))}
+                                                className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* QR Gift Upsell Section - Premium Banner & Modal Trigger */}
+                                <div className="pt-8 border-t border-slate-200">
+                                    <div 
+                                        className={`group relative p-8 rounded-[2rem] border-2 transition-all cursor-pointer shadow-sm hover:shadow-xl ${isGift ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white hover:border-primary/30'}`}
+                                        onClick={() => setShowGiftModal(true)}
+                                    >
+                                        <div className="flex items-center justify-between gap-6">
+                                            <div className="flex items-center gap-6">
+                                                <div className={`size-16 rounded-2xl flex items-center justify-center transition-all rotate-3 group-hover:rotate-0 ${isGift ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-primary/10 group-hover:text-primary'}`}>
+                                                    <span className="material-symbols-outlined text-4xl">{isGift ? 'verified' : 'featured_seasonal'}</span>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <h3 className="font-black text-2xl text-slate-900">
+                                                            {isGift ? 'Quà tặng đã được nâng cấp' : 'Nâng cấp Quà tặng'}
+                                                        </h3>
+                                                        <span className="text-[10px] bg-slate-900 text-primary px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">Premium</span>
+                                                    </div>
+                                                    <p className="text-slate-500 leading-tight max-w-md">
+                                                        {isGift 
+                                                            ? `Đã thiết lập thiệp "${selectedTheme}" ${photoUrl ? 'với ảnh riêng' : ''} ${videoUrl ? 'và video nhắn gửi' : ''} dành cho ${recipientName || 'người nhận'}.`
+                                                            : 'Tạo trải nghiệm mở quà kỹ thuật số với thiệp QR độc quyền, video chúc mừng và chủ đề thiết kế riêng.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2">
+                                                {!isGift ? (
+                                                    <>
+                                                        <div className="text-2xl font-black text-slate-900">+30,000đ</div>
+                                                        <div className="px-6 py-2 bg-primary text-white text-xs font-black rounded-full shadow-lg shadow-primary/20">THÊM NGAY</div>
+                                                    </>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex flex-col items-end mr-2">
+                                                            {photoUrl && <span className="text-[10px] font-black text-primary uppercase">Ảnh riêng ✓</span>}
+                                                            {videoUrl && <span className="text-[10px] font-black text-primary uppercase">Video ✓</span>}
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); setIsGift(false); }}
+                                                                className="text-slate-400 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors"
+                                                            >
+                                                                Hủy bỏ
+                                                            </button>
+                                                            <div className="px-6 py-2 bg-slate-900 text-white text-xs font-black rounded-full shadow-lg">CHỈNH SỬA</div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="pt-4">
                                     <button
                                         type="button"
@@ -246,164 +335,57 @@ const Checkout = () => {
                                         Continue to Payment
                                     </button>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* QR Gift Upsell Section - Redesigned */}
-                        <div className="pt-8 border-t border-slate-200">
-                            <div 
-                                className={`group relative p-6 rounded-[2rem] border-2 transition-all duration-500 overflow-hidden ${isGift ? 'border-primary bg-primary/5 shadow-2xl shadow-primary/10' : 'border-slate-200 bg-white hover:border-primary/30'}`}
-                                onClick={() => setIsGift(!isGift)}
-                            >
-                                {/* Background Accent */}
-                                {isGift && (
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[50px] -mr-16 -mt-16 rounded-full animate-pulse"></div>
-                                )}
-                                
-                                <div className="relative z-10 flex items-start justify-between gap-4 cursor-pointer">
-                                    <div className="flex items-center gap-5">
-                                        <div className={`size-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${isGift ? 'bg-primary text-[#11221c] rotate-6' : 'bg-slate-100 text-slate-400 group-hover:bg-primary/20 group-hover:text-primary'}`}>
-                                            <span className="material-symbols-outlined text-3xl font-variation-fill">qr_code_2</span>
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h3 className="font-black text-xl text-slate-900">Nâng cấp Quà tặng</h3>
-                                                <span className="text-[10px] bg-[#11221c] text-primary px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">Premium</span>
-                                            </div>
-                                            <p className="text-sm text-slate-500 leading-tight max-w-md">Kèm thiệp in mã QR bí mật. Người nhận quét để mở video/audio chúc mừng đầy cảm xúc.</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2 shrink-0">
-                                        <div className="text-xl font-black text-slate-900">+30,000đ</div>
-                                        <div className={`size-7 rounded-full border-2 flex items-center justify-center transition-all ${isGift ? 'border-primary bg-primary text-[#11221c]' : 'border-slate-300 bg-white'}`}>
-                                            {isGift && <span className="material-symbols-outlined text-lg font-bold">check</span>}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Expanded Gift Form */}
-                                {isGift && (
-                                    <div className="mt-8 space-y-6 pt-8 border-t border-primary/20 animate-fade-in" onClick={(e) => e.stopPropagation()}>
-                                        {/* File Upload Area */}
-                                        <div>
-                                            <label className="block text-sm font-bold text-slate-700 mb-2">Upload Video hoặc Audio chúc mừng</label>
-                                            <div className="relative group">
-                                                <div className="w-full border-2 border-dashed border-slate-300 rounded-xl p-8 transition-all hover:border-primary/50 flex flex-col items-center justify-center bg-white cursor-pointer overflow-hidden">
-                                                    {previewUrl ? (
-                                                        <div className="w-full max-w-xs space-y-3">
-                                                            <video src={previewUrl} className="w-full aspect-video rounded-lg object-cover bg-black" />
-                                                            <button 
-                                                                onClick={() => {setPreviewUrl(null); setGiftFile(null);}}
-                                                                className="w-full py-2 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg hover:bg-red-50 hover:text-red-500 transition-colors"
-                                                            >
-                                                                Xóa file và chọn lại
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <span className="material-symbols-outlined text-4xl text-slate-300 group-hover:text-primary transition-colors">cloud_upload</span>
-                                                            <p className="text-sm font-bold text-slate-600 mt-2">Kéo thả hoặc Click để tải lên</p>
-                                                            <p className="text-[10px] text-slate-400 mt-1">MP4, MOV, MP3 (Tối đa 50MB)</p>
-                                                        </>
-                                                    )}
-                                                    <input 
-                                                        type="file" 
-                                                        className="absolute inset-0 opacity-0 cursor-pointer" 
-                                                        onChange={(e) => {
-                                                            const file = e.target.files[0];
-                                                            if (file) {
-                                                                setGiftFile(file);
-                                                                setPreviewUrl(URL.createObjectURL(file));
-                                                                // Simulate Upload
-                                                                setIsUploading(true);
-                                                                setUploadProgress(0);
-                                                                const interval = setInterval(() => {
-                                                                    setUploadProgress(prev => {
-                                                                        if (prev >= 100) { clearInterval(interval); setIsUploading(false); return 100; }
-                                                                        return prev + 10;
-                                                                    });
-                                                                }, 200);
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                                
-                                                {/* Progress Bar Overlay */}
-                                                {isUploading && (
-                                                    <div className="absolute inset-x-0 -bottom-1">
-                                                        <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Message Textbox */}
-                                        <div>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <label className="text-sm font-bold text-slate-700">Thông điệp ý nghĩa</label>
-                                                <span className="text-[10px] text-slate-400 font-bold uppercase">{giftMessage.length}/200 ký tự</span>
-                                            </div>
-                                            <textarea
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none h-24 text-sm"
-                                                placeholder="Nhập lời nhắn gửi đến người yêu thương..."
-                                                maxLength={200}
-                                                value={giftMessage}
-                                                onChange={(e) => setGiftMessage(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <button 
-                                            type="button"
-                                            className="w-full py-4 bg-[#11221c] text-white rounded-2xl font-black text-sm hover:brightness-125 transition-all flex items-center justify-center gap-3 shadow-xl shadow-slate-200"
-                                            onClick={() => setShowQrModal(true)}
-                                            disabled={!giftMessage && !giftFile}
-                                        >
-                                            <span className="material-symbols-outlined text-lg text-primary">qr_code</span>
-                                            Xem trước mã QR quà tặng
-                                        </button>
-                                        <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mã QR này sẽ được in trực tiếp lên thiệp vật lý</p>
-                                    </div>
-                                )}
                             </div>
-                        </div>
+                        )}
+
+                        {/* Gift Upgrade Modal */}
+                        <GiftUpgradeModal 
+                            isOpen={showGiftModal}
+                            onClose={() => setShowGiftModal(false)}
+                            onApply={(data) => {
+                                setIsGift(true);
+                                setRecipientName(data.recipientName);
+                                setGiftMessage(data.giftMessage);
+                                setSelectedTheme(data.selectedTheme);
+                                setPhotoUrl(data.photoUrl);
+                                setVideoUrl(data.videoUrl);
+                            }}
+                            initialData={{
+                                recipientName,
+                                giftMessage,
+                                selectedTheme,
+                                photoUrl,
+                                videoUrl,
+                                isGift
+                            }}
+                        />
 
                         {/* QR PREVIEW MODAL */}
                         {showQrModal && (
-                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#11221c]/90 backdrop-blur-xl p-4 animate-fade-in" onClick={() => setShowQrModal(false)}>
-                                <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 flex flex-col items-center text-center shadow-2xl scale-100 transition-transform" onClick={(e) => e.stopPropagation()}>
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4 animate-fade-in" onClick={() => setShowQrModal(false)}>
+                                <div className="bg-white rounded-[3rem] w-full max-w-sm p-10 flex flex-col items-center text-center shadow-2xl scale-100 transition-all" onClick={(e) => e.stopPropagation()}>
                                     <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6">
                                         <span className="material-symbols-outlined text-4xl">contactless</span>
                                     </div>
                                     <h3 className="text-2xl font-black text-slate-900 mb-2">Quét thử mã QR</h3>
-                                    <p className="text-slate-500 text-sm mb-8">Dùng điện thoại quét mã dưới đây để xem trước trải nghiệm thiệp chúc mừng điện tử.</p>
+                                    <p className="text-slate-500 text-xs mb-8">Dùng điện thoại quét mã dưới đây để xem trước trải nghiệm thiệp chúc mừng điện tử.</p>
                                     
-                                    <div className="relative p-6 bg-slate-50 rounded-[2rem] border-2 border-slate-100 mb-6">
-                                        {/* Corner Accents */}
-                                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -ml-1 -mt-1 rounded-tl-xl"></div>
-                                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary -mr-1 -mt-1 rounded-tr-xl"></div>
-                                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -ml-1 -mb-1 rounded-bl-xl"></div>
-                                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary -mr-1 -mb-1 rounded-br-xl"></div>
+                                    <div className="relative p-6 bg-slate-50 rounded-3xl border border-slate-100 mb-8">
+                                        <div className="absolute -top-2 -left-2 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-xl"></div>
+                                        <div className="absolute -bottom-2 -right-2 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-xl"></div>
                                         
                                         <img 
-                                            src={`https://quickchart.io/qr?text=${encodeURIComponent('https://c-shop.vn/gift/demo-emotional-card')}&size=300&light=ffffff&dark=000000`} 
+                                            src={`https://quickchart.io/qr?text=${encodeURIComponent('https://c-shop.vn/gift/demo')}&size=200&light=ffffff&dark=000000`} 
                                             alt="Preview QR Code"
-                                            className="w-48 h-48 object-contain relative z-20"
+                                            className="w-40 h-40 object-contain relative z-20"
                                         />
-                                    </div>
-
-                                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 mb-8">
-                                        <p className="text-[10px] text-amber-700 font-bold leading-tight">
-                                            💡 MẸO: Để quét thử chính xác trang web đang chạy trên máy bạn, hãy đổi 'localhost' thành địa chỉ IP local (VD: 192.168.1.x) hoặc dùng ngrok.
-                                        </p>
                                     </div>
 
                                     <button 
                                         onClick={() => setShowQrModal(false)}
-                                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all"
+                                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-primary transition-all shadow-xl"
                                     >
-                                        Đóng lại
+                                        Tôi đã quét xong
                                     </button>
                                 </div>
                             </div>
@@ -411,8 +393,18 @@ const Checkout = () => {
 
                         {/* Step 2: Payment */}
                         {step === 2 && (
-                            <div className="space-y-6 pt-6 border-t border-slate-200 animate-fade-in">
-                                <h2 className="text-2xl font-black text-slate-900">Payment Method</h2>
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-black text-slate-900">Payment Method</h2>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStep(1)}
+                                        className="text-primary font-bold text-sm hover:underline flex items-center gap-1"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                                        Back to Shipping
+                                    </button>
+                                </div>
                                 <p className="text-slate-500 text-sm mb-4">Select your preferred payment method.</p>
 
                                 <div className="border border-slate-300 rounded-xl overflow-hidden bg-white">
