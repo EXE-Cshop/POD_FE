@@ -22,6 +22,9 @@ const UserLogin = () => {
             const res = await authService.login({ email, password });
             const { user } = res.data?.data || res.data || {};
             if (user) {
+                // Set auth data FIRST so that subsequent cart API calls have the token
+                setAuthData(user);
+
                 // Merge Guest Cart Items
                 const guestItems = guestCartStorage.getCartItems();
                 if (guestItems.length > 0) {
@@ -30,7 +33,7 @@ const UserLogin = () => {
                             await cartService.addItem(item.productVariantId, item.quantity, {
                                 frontPrintUrl: item.frontPrintUrl,
                                 backPrintUrl: item.backPrintUrl,
-                                customName: item.productName
+                                customName: item.productName || 'Custom Design'
                             });
                         }
                         guestCartStorage.clearCart();
@@ -39,7 +42,6 @@ const UserLogin = () => {
                     }
                 }
 
-                setAuthData(user);
                 const isAdmin = user.roles?.includes('SUPER_ADMIN') || user.role === 'SUPER_ADMIN';
                 const from = location.state?.from || (isAdmin ? '/admin/dashboard' : '/home');
                 navigate(from, { replace: true });

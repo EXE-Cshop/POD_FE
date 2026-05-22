@@ -1,9 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import * as fabric from 'fabric';
-import { baseProductService, productVariantService, renderService, stickerService, designProductService, uploadImage, cartService, API_ORIGIN } from '../services/api';
-import { serializedToRenderLayers, ensureDataUrlsForLayers, ensureDataUrl, toNum } from '../utils/renderLayers';
-import { authStorage } from '../utils/authStorage';
+import { baseProductService, productVariantService, stickerService, designProductService, uploadImage, cartService, API_ORIGIN } from '../services/api';
 import { guestCartStorage } from '../utils/guestCartStorage';
 import Header from '../components/common/Header';
 import { useAuth } from '../components/AuthProvider';
@@ -949,53 +947,16 @@ const DesignerPage = () => {
     setRenderError(null);
     setCartLoading(true);
 
-    let frontPrintUrl = null;
-    let backPrintUrl = null;
-
+    // ── Lấy preview nhanh từ canvas (client-side, không gọi API render) ──
+    let previewDataUrl = null;
     try {
-      if (frontSerialized.length > 0) {
-        const layersRaw = designSide === 'front'
-          ? designObjectsToRenderLayers(currentSideObjs)
-          : serializedToRenderLayers(frontSerialized);
-        const layers = await ensureDataUrlsForLayers(layersRaw);
-        const garmentUrl = await ensureDataUrl(tshirtImages[activeColor] || '');
-        const res = await renderService.renderPrintFile({
-          width_mm: PRINT_AREA_WIDTH_MM,
-          height_mm: PRINT_AREA_HEIGHT_MM,
-          layers,
-          dpi: 300,
-          garment_image_url: garmentUrl || undefined,
-          print_area_left_ratio: PRINT_AREA_LEFT / CANVAS_WIDTH,
-          print_area_top_ratio: PRINT_AREA_TOP / CANVAS_HEIGHT,
-          print_area_width_ratio: PRINT_AREA_WIDTH / CANVAS_WIDTH,
-          print_area_height_ratio: PRINT_AREA_HEIGHT / CANVAS_HEIGHT,
-        });
-        frontPrintUrl = res.data?.data?.file_url || res.data?.file_url;
-      }
-      if (backSerialized.length > 0) {
-        const layersRaw = designSide === 'back'
-          ? designObjectsToRenderLayers(currentSideObjs)
-          : serializedToRenderLayers(backSerialized);
-        const layers = await ensureDataUrlsForLayers(layersRaw);
-        const garmentUrl = await ensureDataUrl(tshirtImages[activeColor] || '');
-        const res = await renderService.renderPrintFile({
-          width_mm: PRINT_AREA_WIDTH_MM,
-          height_mm: PRINT_AREA_HEIGHT_MM,
-          layers,
-          dpi: 300,
-          garment_image_url: garmentUrl || undefined,
-          print_area_left_ratio: PRINT_AREA_LEFT / CANVAS_WIDTH,
-          print_area_top_ratio: PRINT_AREA_TOP / CANVAS_HEIGHT,
-          print_area_width_ratio: PRINT_AREA_WIDTH / CANVAS_WIDTH,
-          print_area_height_ratio: PRINT_AREA_HEIGHT / CANVAS_HEIGHT,
-        });
-        backPrintUrl = res.data?.data?.file_url || res.data?.file_url;
-      }
-    } catch (err) {
-      console.error('Render failed', err);
-      setRenderError(err.response?.data?.message || err.message || 'Không thể render file in.');
-      return;
-    }
+      const printOverlay = canvas.getObjects().find((o) => o.data?.isPrintArea);
+      if (printOverlay) printOverlay.set('visible', false);
+      canvas.renderAll();
+      previewDataUrl = canvas.toDataURL({ format: 'png', quality: 0.85, multiplier: 1 });
+      if (printOverlay) printOverlay.set('visible', true);
+      canvas.renderAll();
+    } catch (_) { /* preview không quan trọng, bỏ qua lỗi */ }
 
     const colorKeywords = activeColor === 'white'
       ? ['trắng', 'trang', 'white']
@@ -1013,6 +974,7 @@ const DesignerPage = () => {
 
     if (!matchedVariant) {
       setRenderError('Sản phẩm chưa có phân loại (variant). Vui lòng liên hệ admin.');
+      setCartLoading(false);
       return;
     }
     console.log('Matched variant:', matchedVariant, 'from', variants.length, 'variants');
@@ -1024,8 +986,8 @@ const DesignerPage = () => {
 
       if (isAuth) {
         await cartService.addItem(matchedVariant.id, quantity, {
-          frontPrintUrl,
-          backPrintUrl,
+          frontPrintUrl: null,
+          backPrintUrl: null,
           customName: productName,
         });
       } else {
@@ -1037,9 +999,9 @@ const DesignerPage = () => {
           quantity: quantity,
           colorName: activeColor,
           size: selectedSize,
-          imageUrl: designSide === 'front' ? frontPrintUrl : backPrintUrl || designSide === 'front' ? tshirtImages[activeColor] : tshirtImages[activeColor], // Fallback to plain tshirt
-          frontPrintUrl,
-          backPrintUrl,
+          imageUrl: previewDataUrl || tshirtImages[activeColor],
+          frontPrintUrl: null,
+          backPrintUrl: null,
           availableSizes: SIZES
         });
       }
@@ -1073,7 +1035,7 @@ const DesignerPage = () => {
     setShowToast(true);
     setCartLoading(false);
     setTimeout(() => setIsAdded(false), 2000);
-    setTimeout(() => setShowToast(false), 4000);
+    setTimeout(() => setShowToast(false), 10000);
   };
 
 
@@ -1349,6 +1311,23 @@ const DesignerPage = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background-light font-display text-slate-900">
+      {/* ── Cart Loading Overlay ─────────────────────────────────── */}
+      {cartLoading && (
+        <div
+          id="cart-loading-overlay"
+          className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm"
+          style={{ pointerEvents: 'all' }}
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl max-w-xs w-full mx-4">
+            <div className="size-14 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="text-center">
+              <h3 className="text-white font-bold text-base">Đang xử lý thiết kế...</h3>
+              <p className="text-slate-400 text-xs mt-1">Vui lòng đợi, đang render ảnh in</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────── */}
       <Header />
 
@@ -1559,6 +1538,7 @@ const DesignerPage = () => {
                 </div>
 
                 <button
+                  id="add-text-button"
                   onClick={addText}
                   disabled={!textValue.trim()}
                   className="w-full flex items-center justify-center gap-2 h-10 bg-primary text-[#11221c] rounded-lg font-bold text-sm hover:brightness-110 transition-all shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
@@ -1874,6 +1854,7 @@ const DesignerPage = () => {
               </div>
 
               <button
+                id="add-to-cart-designer-button"
                 onClick={addToCart}
                 disabled={isAdded || cartLoading}
                 className={`w-full flex items-center justify-center gap-3 h-12 rounded-xl text-sm font-bold transition-all duration-300 ${isAdded
@@ -2010,6 +1991,7 @@ const DesignerPage = () => {
             <p className="text-xs text-slate-400 mt-0.5">Custom design added — view cart to checkout</p>
           </div>
           <button
+            id="view-cart-toast-button"
             onClick={() => navigate('/home/cart')}
             className="px-4 py-2 bg-primary text-[#11221c] text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
           >

@@ -134,6 +134,7 @@ const Checkout = () => {
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
                                     <input
+                                        id="checkout-email"
                                         type="email"
                                         required
                                         value={email}
@@ -150,6 +151,7 @@ const Checkout = () => {
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">First Name</label>
                                     <input
+                                        id="checkout-first-name"
                                         type="text"
                                         required
                                         value={addressFields.firstName}
@@ -160,6 +162,7 @@ const Checkout = () => {
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">Last Name</label>
                                     <input
+                                        id="checkout-last-name"
                                         type="text"
                                         required
                                         value={addressFields.lastName}
@@ -170,6 +173,7 @@ const Checkout = () => {
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-bold text-slate-700 mb-1">Street Address</label>
                                     <input
+                                        id="checkout-street"
                                         type="text"
                                         required
                                         value={addressFields.street}
@@ -181,6 +185,7 @@ const Checkout = () => {
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-bold text-slate-700 mb-1">Apartment, suite, etc. (optional)</label>
                                     <input
+                                        id="checkout-apt"
                                         type="text"
                                         value={addressFields.apt}
                                         onChange={(e) => setAddressFields(prev => ({ ...prev, apt: e.target.value }))}
@@ -191,6 +196,7 @@ const Checkout = () => {
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1">City</label>
                                     <input
+                                        id="checkout-city"
                                         type="text"
                                         required
                                         value={addressFields.city}
@@ -202,6 +208,7 @@ const Checkout = () => {
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 mb-1">State</label>
                                         <select
+                                            id="checkout-state"
                                             required
                                             value={addressFields.state}
                                             onChange={(e) => setAddressFields(prev => ({ ...prev, state: e.target.value }))}
@@ -216,6 +223,7 @@ const Checkout = () => {
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 mb-1">ZIP Code</label>
                                         <input
+                                            id="checkout-zip"
                                             type="text"
                                             required
                                             value={addressFields.zip}
@@ -229,6 +237,7 @@ const Checkout = () => {
                             {step === 1 && (
                                 <div className="pt-4">
                                     <button
+                                        id="checkout-continue-button"
                                         type="button"
                                         onClick={() => setStep(2)}
                                         className="w-full md:w-auto h-14 px-10 bg-slate-900 text-white rounded-lg font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl"

@@ -55,6 +55,9 @@ const Header = ({ children }) => {
                         <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/community-designs">
                             Thiết kế cộng đồng
                         </Link>
+                        <Link className="text-slate-600 text-sm font-medium hover:text-primary transition-colors" to="/home/smart-wardrobe">
+                            Tủ đồ thông minh
+                        </Link>
                     </nav>
 
                     {/* Cart */}
