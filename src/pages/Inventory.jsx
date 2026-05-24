@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { baseProductService } from '../services/api';
+import { productService } from '../services/api';
+import { formatCurrency } from '../utils/formatters';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
 
@@ -12,7 +13,7 @@ const Inventory = () => {
         const fetchProducts = async () => {
             setLoading(true);
             try {
-                const response = await baseProductService.getAll({ page: 1, size: 50 });
+                const response = await productService.getAll({ page: 1, size: 50 });
                 console.log('Admin Products API Response:', response.data);
                 const apiData = response.data;
                 let productList = [];
@@ -25,7 +26,7 @@ const Inventory = () => {
                 }
                 setProducts(productList);
             } catch (err) {
-                console.error('Failed to fetch base products:', err);
+                console.error('Failed to fetch products:', err);
                 setError('Failed to load products.');
             } finally {
                 setLoading(false);
@@ -34,17 +35,12 @@ const Inventory = () => {
         fetchProducts();
     }, []);
 
-    const formatPrice = (price) => {
-        if (!price) return '0₫';
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
-    };
-
     return (
-        <div className="flex-1 overflow-auto max-w-[1200px] mx-auto py-8 px-4 text-slate-900 ">
+        <div className="flex-1 overflow-auto max-w-[1200px] mx-auto py-8 px-4 text-slate-900 font-display">
             {/* Section Header */}
             <div className="mb-6">
-                <h1 className="text-slate-900  text-3xl font-extrabold tracking-tight">Base Product Management</h1>
-                <p className="text-slate-500  mt-1">Configure blank merchandise and define printable zones for the customization engine.</p>
+                <h1 className="text-slate-900 text-3xl font-extrabold tracking-tight uppercase">PRODUCT CATALOG MANAGEMENT</h1>
+                <p className="text-slate-500 mt-1">View and manage CShop's physical merchandise catalog, colorways, size tiers, and inventory.</p>
             </div>
 
             {/* Content */}
@@ -64,41 +60,49 @@ const Inventory = () => {
             ) : products.length === 0 ? (
                 <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
                     <span className="material-symbols-outlined text-5xl text-slate-300">inventory_2</span>
-                    <p className="text-slate-500 font-medium text-lg">No base products yet</p>
-                    <p className="text-slate-400 text-sm">Add your first base product to get started.</p>
+                    <p className="text-slate-500 font-medium text-lg">No products yet</p>
+                    <p className="text-slate-400 text-sm">Add your first streetwear product to get started.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {products.map(product => (
                         <div key={product.id} className="group bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col hover:border-primary/50 transition-all duration-300">
                             <div className="relative w-full aspect-square bg-white flex items-center justify-center overflow-hidden">
-                                <div
-                                    className="absolute inset-0 bg-center bg-no-repeat bg-contain p-4 group-hover:scale-105 transition-transform duration-500"
-                                    style={{ backgroundImage: `url("${product.imageUrl || DEFAULT_IMAGE}")` }}
-                                ></div>
-                                <div className={`absolute top-2 right-2 px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ${product.active ? 'bg-background-dark/80 text-primary' : 'bg-red-100 text-red-600'}`}>
+                                {product.imageUrl ? (
+                                    <img 
+                                        src={product.imageUrl} 
+                                        alt={product.name} 
+                                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
+                                ) : (
+                                    <div
+                                        className="absolute inset-0 bg-center bg-no-repeat bg-contain p-4 group-hover:scale-105 transition-transform duration-500"
+                                        style={{ backgroundImage: `url("${DEFAULT_IMAGE}")` }}
+                                    ></div>
+                                )}
+                                <div className={`absolute top-2 right-2 px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ${product.active ? 'bg-background-dark/85 text-primary' : 'bg-red-100 text-red-600'}`}>
                                     {product.active ? 'Active' : 'Inactive'}
                                 </div>
                             </div>
                             <div className="p-5 flex flex-col flex-1">
-                                <h3 className="text-slate-900 text-lg font-bold mb-1">{product.name}</h3>
-                                <p className="text-slate-500 text-xs font-mono uppercase tracking-widest mb-1">
-                                    {formatPrice(product.basePrice)}
+                                <h3 className="text-slate-900 text-base font-black truncate uppercase mb-1">{product.name}</h3>
+                                <p className="text-primary text-sm font-black uppercase tracking-wider mb-2">
+                                    {formatCurrency(product.basePrice)}
                                 </p>
-                                <div className="flex items-center gap-2 mb-4 flex-wrap">
+                                <div className="flex items-center gap-2 mb-4 flex-wrap text-xs text-slate-500 font-bold">
                                     {product.material && (
                                         <>
-                                            <span className="text-slate-500 text-sm">{product.material}</span>
+                                            <span>{product.material}</span>
                                             <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                                         </>
                                     )}
-                                    {product.printTechnology && (
-                                        <span className="text-slate-500 text-sm">{product.printTechnology}</span>
+                                    {product.slug && (
+                                        <span className="truncate">slug: {product.slug}</span>
                                     )}
                                 </div>
-                                <button className="mt-auto w-full py-2.5 rounded-lg bg-slate-100 text-slate-900 text-sm font-bold hover:bg-primary hover:text-background-dark transition-all flex items-center justify-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">design_services</span>
-                                    Manage Print Areas
+                                <button className="mt-auto w-full py-2.5 rounded-lg bg-slate-100 text-slate-900 text-xs font-black uppercase tracking-wider hover:bg-primary hover:text-background-dark transition-all flex items-center justify-center gap-2">
+                                    <span className="material-symbols-outlined text-sm">visibility</span>
+                                    View Details
                                 </button>
                             </div>
                         </div>

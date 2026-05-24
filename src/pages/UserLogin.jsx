@@ -72,7 +72,7 @@ const UserLogin = () => {
                 )}
                 <div>
                     <label htmlFor="username" className="block text-sm font-medium leading-6 text-slate-900">
-                        Username or Email
+                        Email
                     </label>
                     <div className="mt-2 relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -84,7 +84,7 @@ const UserLogin = () => {
                             type="text"
                             autoComplete="username"
                             className="block w-full rounded-xl border-0 py-3 pl-10 pr-4 text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 bg-slate-50 transition-all font-medium"
-                            placeholder="admin"
+                            placeholder="superadmin@cshop.local"
                         />
                     </div>
                 </div>

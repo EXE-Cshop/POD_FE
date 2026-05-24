@@ -13,7 +13,7 @@ const Sidebar = () => {
                         style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCRnSSEYHutkMPUcBvdUfDlvvv0M0ZJ7-dTvTeT6QNfSmQOzQMskjmU6_XRsBswUvq3w9dB9pepyUzpuhnHL6ZMwZk-CNLCtXKfHrR04JUkwa1wbth7mSdOue-evh8bdQ4nbZAnbvcZ-40BZXFGXydj_v-W-UDl3pNKrTm4avDccFs_u4hgNHrvRHi2fzNuCMaqd02grDNb9avCA_RKAWB3bEfz9jHzCliJy1v2ZJ06YWtPkmM2_gS5XM4aJaiU1l8_bIgSJD-petw")' }}>
                     </div>
                     <div className="flex flex-col">
-                        <h1 className="text-gray-900  text-base font-bold leading-none">PrintPOD Admin</h1>
+                        <h1 className="text-gray-900  text-base font-bold leading-none">CShop Admin</h1>
                         <p className="text-gray-500  text-xs mt-1">Platform Management</p>
                     </div>
                 </div>
@@ -32,10 +32,9 @@ const Sidebar = () => {
                     { name: 'Dashboard', icon: 'dashboard', path: '/admin/dashboard' },
                     { name: 'User Directory', icon: 'group', path: '/admin/users' },
                     { name: 'Order Management', icon: 'shopping_cart', path: '/admin/orders' },
-                    { name: 'Base Products', icon: 'inventory_2', path: '/admin/base-products' },
-                    { name: 'Print Areas', icon: 'aspect_ratio', path: '/admin/print-areas' },
-                    { name: 'Stickers', icon: 'category', path: '/admin/stickers' },
-                    { name: 'Scheduler', icon: 'schedule', path: '/admin/scheduler' },
+                    { name: 'Categories', icon: 'category', path: '/admin/categories' },
+                    { name: 'Products', icon: 'inventory_2', path: '/admin/products' },
+                    { name: 'Promotions', icon: 'sell', path: '/admin/promotions' },
                     { name: 'Roles & Permissions', icon: 'shield', path: '/admin/roles' },
                 ].map((item) => (
                     <NavLink

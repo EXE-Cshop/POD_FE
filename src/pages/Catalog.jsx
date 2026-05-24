@@ -1,158 +1,196 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { baseProductService } from '../services/api';
-
-const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=1080&auto=format&fit=crop';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { productService, wishlistService } from '../services/api';
+import ProductCard from '../components/ProductCard';
+import CategoryFilter from '../components/CategoryFilter';
+import SearchBar from '../components/SearchBar';
+import { useAuth } from '../components/AuthProvider';
 
 const Catalog = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Filters and search states from URL or state
+    const [selectedCategory, setSelectedCategory] = useState(
+        searchParams.get('categoryId') ? Number(searchParams.get('categoryId')) : null
+    );
+    const [keyword, setKeyword] = useState(searchParams.get('q') || '');
+    const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0);
+    const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 0);
+    const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'id,desc');
 
     const [products, setProducts] = useState([]);
+    const [wishlistedIds, setWishlistedIds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Fetch base products from API
+    // Sync state with URL search params
+    useEffect(() => {
+        const params = {};
+        if (selectedCategory) params.categoryId = selectedCategory;
+        if (keyword) params.q = keyword;
+        if (minPrice) params.minPrice = minPrice;
+        if (maxPrice) params.maxPrice = maxPrice;
+        if (sortBy !== 'id,desc') params.sort = sortBy;
+        setSearchParams(params);
+    }, [selectedCategory, keyword, minPrice, maxPrice, sortBy]);
+
+    // Fetch wishlist items if user logged in
+    useEffect(() => {
+        const fetchWishlist = async () => {
+            if (!user) return;
+            try {
+                const res = await wishlistService.get();
+                const items = res.data?.data || res.data || [];
+                setWishlistedIds(items.map(item => item.product?.id || item.productId));
+            } catch (err) {
+                console.error('Error fetching wishlist ids:', err);
+            }
+        };
+        fetchWishlist();
+    }, [user]);
+
+    // Fetch products from API based on filters
     useEffect(() => {
         const fetchProducts = async () => {
             setLoading(true);
             setError(null);
             try {
-                const response = await baseProductService.getAll({ page: 1, size: 50 });
-                console.log('API Response:', response.data);
-                // ApiResponse<Page<BaseProductDTO>> => response.data = { code, message, data: { content: [...] } }
+                const params = {
+                    page: 0,
+                    size: 24,
+                    sort: sortBy,
+                };
+                if (selectedCategory) params.categoryId = selectedCategory;
+                if (keyword) params.keyword = keyword;
+
+                const response = await productService.getAll(params);
                 const apiData = response.data;
+                
                 let productList = [];
                 if (apiData?.data?.content) {
-                    // Paginated response
                     productList = apiData.data.content;
                 } else if (Array.isArray(apiData?.data)) {
-                    // Direct array response
                     productList = apiData.data;
                 } else if (Array.isArray(apiData)) {
                     productList = apiData;
                 }
+
+                // Client-side price filter if needed (or if API supports it, here we filter locally as a robust fallback)
+                if (minPrice > 0) {
+                    productList = productList.filter(p => p.basePrice >= minPrice);
+                }
+                if (maxPrice > 0) {
+                    productList = productList.filter(p => p.basePrice <= maxPrice);
+                }
+
                 setProducts(productList);
             } catch (err) {
                 console.error('Failed to fetch products:', err);
-                if (err.response) {
-                    console.error('Error response:', err.response.status, err.response.data);
-                    setError(`Lỗi server: ${err.response.status} - ${err.response.data?.message || 'Unknown error'}`);
-                } else if (err.request) {
-                    setError('Không thể kết nối đến server. Hãy kiểm tra backend đã chạy chưa.');
-                } else {
-                    setError('Đã xảy ra lỗi. Vui lòng thử lại sau.');
-                }
+                setError('Could not load products. Please check if backend is running.');
             } finally {
                 setLoading(false);
             }
         };
-        fetchProducts();
-    }, []);
 
-    const formatPrice = (price) => {
-        if (!price) return '0₫';
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+        // Debounce search input
+        const timer = setTimeout(() => {
+            fetchProducts();
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [selectedCategory, keyword, minPrice, maxPrice, sortBy]);
+
+    const handleWishlistToggle = (productId, isAdded) => {
+        if (isAdded) {
+            setWishlistedIds(prev => [...prev, productId]);
+        } else {
+            setWishlistedIds(prev => prev.filter(id => id !== productId));
+        }
     };
 
     return (
-        <div className="flex-1 overflow-auto max-w-[1440px] mx-auto px-4 md:px-10 lg:px-20 py-8 text-slate-900 bg-background-light w-full">
-            {/* Breadcrumbs */}
-            <div className="flex flex-wrap items-center gap-2 mb-6">
-                <span className="text-slate-500 text-sm font-medium hover:text-primary cursor-pointer" onClick={() => navigate('/home')}>Home</span>
-                <span className="material-symbols-outlined text-slate-400 text-xs">chevron_right</span>
-                <span className="text-primary text-sm font-semibold">Catalog</span>
-            </div>
-
-            {/* Page Heading */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-10">
-                <div className="max-w-2xl">
-                    <h1 className="text-slate-900 text-4xl lg:text-5xl font-black leading-tight tracking-[-0.033em]">
-                        All Products
-                    </h1>
-                    <p className="text-slate-600 text-lg mt-2">Find the perfect blank canvas for your art.</p>
+        <div className="flex-1 overflow-auto bg-gray-50/50 w-full min-h-screen">
+            <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-8 font-display">
+                
+                {/* Breadcrumbs */}
+                <div className="flex items-center gap-2 mb-6 text-xs font-bold uppercase tracking-wider text-gray-400">
+                    <span className="hover:text-primary cursor-pointer transition-colors" onClick={() => navigate('/home')}>Home</span>
+                    <span className="material-symbols-outlined text-[10px] font-black">chevron_right</span>
+                    <span className="text-emerald-600">Catalog</span>
                 </div>
-                <div className="flex items-center gap-3 bg-slate-200 p-1 rounded-lg">
-                    <button className="px-4 py-2 rounded-md bg-primary text-[#11221c] text-sm font-bold shadow-sm">Grid View</button>
-                    <button className="px-4 py-2 rounded-md text-slate-600 text-sm font-bold hover:text-white transition-colors">List View</button>
-                </div>
-            </div>
 
-            {/* Product Grid - No Category Sidebar */}
-            <div className="w-full">
-                {loading ? (
-                    <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-                        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-                        <p className="text-slate-500 text-sm font-medium">Đang tải sản phẩm...</p>
+                {/* Page Heading & Search */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
+                    <div>
+                        <h1 className="text-gray-900 text-4xl font-black leading-none tracking-tight mb-2">
+                            Trend Catalog
+                        </h1>
+                        <p className="text-gray-500 text-sm font-semibold">
+                            Explore our curated streetwear designs crafted for modern fashion aesthetics.
+                        </p>
                     </div>
-                ) : error ? (
-                    <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-                        <span className="material-symbols-outlined text-4xl text-red-400">error</span>
-                        <p className="text-red-500 font-medium text-center max-w-md">{error}</p>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="px-6 py-2.5 bg-slate-100 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-                        >
-                            Thử lại
-                        </button>
+                    <SearchBar value={keyword} onChange={setKeyword} />
+                </div>
+
+                {/* Main Content Layout */}
+                <div className="flex flex-col lg:flex-row gap-8 items-start">
+                    
+                    {/* Left Filter Sidebar */}
+                    <div className="w-full lg:w-72 flex-shrink-0">
+                        <CategoryFilter
+                            selectedCategory={selectedCategory}
+                            onSelectCategory={setSelectedCategory}
+                            minPrice={minPrice}
+                            maxPrice={maxPrice}
+                            onPriceChange={(min, max) => {
+                                setMinPrice(min);
+                                setMaxPrice(max);
+                            }}
+                            sortBy={sortBy}
+                            onSortChange={setSortBy}
+                        />
                     </div>
-                ) : products.length === 0 ? (
-                    <div className="w-full py-20 flex flex-col items-center justify-center gap-4">
-                        <span className="material-symbols-outlined text-5xl text-slate-300">inventory_2</span>
-                        <p className="text-slate-500 font-medium text-lg">Chưa có sản phẩm nào</p>
-                        <p className="text-slate-400 text-sm">Hãy thêm sản phẩm base từ trang Admin.</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {products.map((product, idx) => (
-                            <div
-                                key={product.id}
-                                className="group flex flex-col bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-2"
-                                style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
-                            >
-                                <div className="relative aspect-[4/5] overflow-hidden bg-slate-100 cursor-pointer" onClick={() => navigate(`/home/product/${product.id}`)}>
-                                    <img
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                        src={product.imageUrl || DEFAULT_IMAGE}
-                                        alt={product.name}
-                                        onError={(e) => { e.target.src = DEFAULT_IMAGE; }}
-                                    />
-                                </div>
-                                <div className="p-5 flex flex-col grow">
-                                    {product.material && (
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{product.material}</p>
-                                    )}
-                                    <h3
-                                        className="text-slate-900 text-lg font-bold leading-tight mb-2 cursor-pointer hover:text-primary transition-colors"
-                                        onClick={() => navigate(`/home/product/${product.id}`)}
-                                    >
-                                        {product.name}
-                                    </h3>
-                                    {product.description && (
-                                        <p className="text-slate-500 text-sm mb-3 line-clamp-2">{product.description}</p>
-                                    )}
-                                    <span className="text-primary text-xl font-black mb-4">{formatPrice(product.basePrice)}</span>
-                                    <div className="mt-auto flex flex-col gap-2">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => navigate(`/design/${product.id}`)}
-                                                className="flex-[3] flex items-center justify-center gap-2 rounded-lg h-11 bg-slate-100 text-slate-900 text-sm font-bold hover:bg-primary hover:text-[#11221c] transition-colors"
-                                            >
-                                                Tuỳ chỉnh thiết kế
-                                            </button>
-                                            <button
-                                                onClick={() => navigate(`/home/product/${product.id}`, { state: { autoAddToCart: true } })}
-                                                className="flex-[1] flex items-center justify-center rounded-lg h-11 bg-primary text-[#11221c] hover:brightness-110 transition-all"
-                                                title="Thêm vào giỏ hàng"
-                                            >
-                                                <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+
+                    {/* Right Product Grid */}
+                    <div className="flex-grow w-full">
+                        {loading ? (
+                            <div className="w-full py-32 flex flex-col items-center justify-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                                <div className="size-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                <p className="text-gray-400 text-sm font-bold uppercase tracking-wider">Curating products...</p>
                             </div>
-                        ))}
+                        ) : error ? (
+                            <div className="w-full py-20 flex flex-col items-center justify-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                                <span className="material-symbols-outlined text-4xl text-rose-500">error</span>
+                                <p className="text-rose-500 font-bold text-center">{error}</p>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="px-6 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-black uppercase tracking-wider transition-colors border border-gray-100"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : products.length === 0 ? (
+                            <div className="w-full py-32 flex flex-col items-center justify-center gap-4 bg-white rounded-3xl border border-gray-100 border-dashed">
+                                <span className="material-symbols-outlined text-5xl text-gray-300">inventory_2</span>
+                                <p className="text-gray-400 font-extrabold text-sm uppercase tracking-wider">No matching styles found</p>
+                                <p className="text-gray-400 text-xs mt-[-5px]">Try adjusting your search filters or price ranges.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">
+                                {products.map((product) => (
+                                    <ProductCard
+                                        key={product.id}
+                                        product={product}
+                                        isWishlistedInitial={wishlistedIds.includes(product.id)}
+                                        onWishlistToggle={handleWishlistToggle}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
             </div>
         </div>
     );

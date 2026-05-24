@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { orderService, adminService } from '../services/api';
+import { formatCurrency, formatDate } from '../utils/formatters';
 
 const PrintQueue = () => {
     const [orders, setOrders] = useState([]);
@@ -13,6 +14,7 @@ const PrintQueue = () => {
 
     const fetchOrders = async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = {
                 page,
@@ -20,18 +22,13 @@ const PrintQueue = () => {
                 status: filterStatus || undefined,
             };
             const response = await orderService.getOrders(params);
-            setOrders(response.data.data.content);
-            setTotalPages(response.data.data.totalPages);
+            setOrders(response.data?.data?.content || []);
+            setTotalPages(response.data?.data?.totalPages || 0);
             setLoading(false);
         } catch (err) {
             console.error('Failed to fetch orders:', err);
-            setError('Failed to fetch orders. Showing mock data for demonstration.');
-            // Mock data for demo
-            setOrders([
-                { id: 9842, recipientName: 'Sarah Jenkins', status: 'PENDING', createdDate: '2023-10-24T08:45:00Z', totalAmount: 124.50 },
-                { id: 9841, recipientName: 'Michael Chen', status: 'PAID', createdDate: '2023-10-24T05:30:00Z', totalAmount: 89.00 },
-                { id: 9840, recipientName: 'Emma Watson', status: 'SHIPPED', createdDate: '2023-10-23T14:20:00Z', totalAmount: 210.20 },
-            ]);
+            setError('Failed to fetch orders. Please check your admin permissions or backend status.');
+            setOrders([]);
             setLoading(false);
         }
     };
@@ -39,7 +36,7 @@ const PrintQueue = () => {
     const fetchStats = async () => {
         try {
             const response = await adminService.getStats();
-            setStats(response.data.data);
+            setStats(response.data?.data || null);
         } catch (err) {
             console.error('Failed to fetch stats:', err);
         }
@@ -99,7 +96,6 @@ const PrintQueue = () => {
                     <div className="bg-white  border border-slate-200  rounded-xl p-6 shadow-sm">
                         <div className="flex justify-between items-start mb-4">
                             <p className="text-slate-500  text-sm font-medium">Total Orders</p>
-                            <span className="text-emerald-500 text-xs font-bold bg-emerald-500/10 px-2 py-1 rounded">+12.4%</span>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 ">{stats?.totalOrders || '0'}</p>
                         <div className="mt-4 w-full bg-slate-100  h-1.5 rounded-full overflow-hidden">
@@ -119,9 +115,8 @@ const PrintQueue = () => {
                     <div className="bg-white  border border-slate-200  rounded-xl p-6 shadow-sm">
                         <div className="flex justify-between items-start mb-4">
                             <p className="text-slate-500  text-sm font-medium">Total Revenue</p>
-                            <span className="text-emerald-500 text-xs font-bold bg-emerald-500/10 px-2 py-1 rounded">+5.2%</span>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 ">${stats?.totalRevenue?.toLocaleString() || '0.00'}</p>
+                        <p className="text-3xl font-bold text-slate-900 ">{formatCurrency(stats?.totalRevenue)}</p>
                         <div className="mt-4 w-full bg-slate-100  h-1.5 rounded-full overflow-hidden">
                             <div className="bg-primary h-full" style={{ width: '60%' }}></div>
                         </div>
@@ -131,11 +126,11 @@ const PrintQueue = () => {
                 {/* Filters and Actions */}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="flex gap-2 flex-wrap">
-                        <button className="flex items-center gap-2 px-4 py-2 bg-primary text-background-dark text-sm font-bold rounded-lg hover:brightness-90 transition-all">
+                        <button disabled className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 text-sm font-bold rounded-lg cursor-not-allowed border border-slate-200">
                             <span className="material-symbols-outlined text-[18px]">add</span>
                             New Order
                         </button>
-                        <button className="flex items-center gap-2 px-4 py-2 bg-slate-100  text-slate-900 text-sm font-medium rounded-lg hover:bg-slate-200  transition-colors border border-slate-200">
+                        <button disabled className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 text-sm font-medium rounded-lg cursor-not-allowed border border-slate-200">
                             <span className="material-symbols-outlined text-[18px]">download</span>
                             Export
                         </button>
@@ -190,7 +185,7 @@ const PrintQueue = () => {
                                 ) : orders.length === 0 ? (
                                     <tr>
                                         <td colSpan="7" className="px-6 py-12 text-center text-slate-400">
-                                            No orders found for this filter.
+                            {error || 'No orders found for this filter.'}
                                         </td>
                                     </tr>
                                 ) : (
@@ -212,17 +207,17 @@ const PrintQueue = () => {
                                                     {order.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-slate-600 ">{new Date(order.createdDate).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 font-bold text-slate-900 ">${order.totalAmount?.toFixed(2)}</td>
+                                            <td className="px-6 py-4 text-slate-600 ">{formatDate(order.createdDate)}</td>
+                                            <td className="px-6 py-4 font-bold text-slate-900 ">{formatCurrency(order.totalAmount)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button className="p-1.5 hover:bg-slate-200  rounded transition-colors text-slate-400 " title="Print Invoice">
+                                                    <button disabled className="p-1.5 rounded transition-colors text-slate-300 cursor-not-allowed" title="Print Invoice">
                                                         <span className="material-symbols-outlined text-[20px]">print</span>
                                                     </button>
-                                                    <button className="p-1.5 hover:bg-slate-200  rounded transition-colors text-slate-400 " title="Edit">
+                                                    <button disabled className="p-1.5 rounded transition-colors text-slate-300 cursor-not-allowed" title="Edit">
                                                         <span className="material-symbols-outlined text-[20px]">edit</span>
                                                     </button>
-                                                    <button className="p-1.5 hover:bg-slate-200  rounded transition-colors text-slate-400 " title="More">
+                                                    <button disabled className="p-1.5 rounded transition-colors text-slate-300 cursor-not-allowed" title="More">
                                                         <span className="material-symbols-outlined text-[20px]">more_vert</span>
                                                     </button>
                                                 </div>

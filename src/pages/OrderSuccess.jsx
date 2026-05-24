@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { formatCurrency } from '../utils/formatters';
 
 const OrderSuccess = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [order, setOrder] = useState(null);
 
     useEffect(() => {
         window.scrollTo(0, 0);
+        if (location.state?.order) {
+            setOrder(location.state.order);
+            localStorage.removeItem('lastOrder');
+            return;
+        }
         const savedOrder = localStorage.getItem('lastOrder');
         if (savedOrder) {
             try {
@@ -14,15 +21,9 @@ const OrderSuccess = () => {
             } catch { /* ignore parse errors */ }
             localStorage.removeItem('lastOrder');
         }
-    }, []);
+    }, [location.state]);
 
-    const orderNumber = order?.id ? `ORD-${String(order.id).padStart(4, '0')}` : `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-
-    const formatDate = (dateStr) => {
-        if (!dateStr) return 'N/A';
-        const d = new Date(dateStr);
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    };
+    const orderNumber = order?.id ? `ORD-${String(order.id).padStart(4, '0')}` : null;
 
     const getEstimatedDelivery = () => {
         const start = new Date();
@@ -45,10 +46,12 @@ const OrderSuccess = () => {
                     </div>
                 </div>
 
-                <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-4 tracking-tight">Order Confirmed!</h1>
+                <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-4 tracking-tight">{order ? 'Order Confirmed!' : 'No Order Found'}</h1>
 
                 <p className="text-lg md:text-xl text-slate-600 mb-8 leading-relaxed">
-                    Thank you for your purchase. We've received your order and we are getting it ready to be shipped.
+                    {order
+                        ? "Thank you for your purchase. We've received your order and we are getting it ready to be shipped."
+                        : 'There is no recent checkout result to display.'}
                 </p>
 
                 {/* Order Details Card */}
@@ -58,7 +61,7 @@ const OrderSuccess = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Order Number</span>
-                            <span className="text-lg font-black text-slate-900">{orderNumber}</span>
+                            <span className="text-lg font-black text-slate-900">{orderNumber || 'N/A'}</span>
                         </div>
                         <div>
                             <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Estimated Delivery</span>
@@ -67,7 +70,7 @@ const OrderSuccess = () => {
                         {order?.totalAmount && (
                             <div>
                                 <span className="block text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Total Amount</span>
-                                <span className="text-lg font-black text-primary">${Number(order.totalAmount).toFixed(2)}</span>
+                                <span className="text-lg font-black text-primary">{formatCurrency(order.totalAmount)}</span>
                             </div>
                         )}
                         {order?.paymentMethod && (

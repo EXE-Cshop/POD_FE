@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { adminService } from '../services/api';
+import { formatCurrency } from '../utils/formatters';
 
 const AdminDashboard = () => {
     const [stats, setStats] = useState(null);
@@ -16,20 +17,6 @@ const AdminDashboard = () => {
                 console.error('Failed to fetch stats:', err);
                 setError('Failed to fetch dashboard statistics.');
                 setLoading(false);
-                // Fallback for demo if backend is not running
-                setStats({
-                    totalOrders: 1245,
-                    pendingOrders: 42,
-                    paidOrders: 890,
-                    processingOrders: 15,
-                    shippedOrders: 200,
-                    completedOrders: 98,
-                    cancelledOrders: 5,
-                    totalRevenue: 12450.50,
-                    pendingRevenue: 450.00,
-                    paidRevenue: 8900.00,
-                    completedRevenue: 3100.50
-                });
             }
         };
 
@@ -37,7 +24,7 @@ const AdminDashboard = () => {
     }, []);
 
     const statCards = [
-        { label: 'Total Revenue', value: `$${stats?.totalRevenue?.toLocaleString()}`, icon: 'payments', color: 'bg-emerald-500' },
+        { label: 'Total Revenue', value: formatCurrency(stats?.totalRevenue), icon: 'payments', color: 'bg-emerald-500' },
         { label: 'Total Orders', value: stats?.totalOrders, icon: 'shopping_bag', color: 'bg-primary' },
         { label: 'Pending Orders', value: stats?.pendingOrders, icon: 'hourglass_empty', color: 'bg-amber-500' },
         { label: 'Completed Orders', value: stats?.completedOrders, icon: 'check_circle', color: 'bg-blue-500' },
@@ -68,7 +55,6 @@ const AdminDashboard = () => {
                                     <div className={`size-12 rounded-xl ${card.color} flex items-center justify-center text-background-dark`}>
                                         <span className="material-symbols-outlined">{card.icon}</span>
                                     </div>
-                                    <span className="text-emerald-500 text-xs font-bold bg-emerald-500/10 px-2 py-1 rounded">+12.4%</span>
                                 </div>
                                 <h3 className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">{card.label}</h3>
                                 <p className="text-3xl font-black text-slate-900">{card.value}</p>
@@ -84,20 +70,20 @@ const AdminDashboard = () => {
                                 Revenue Analytics
                             </h3>
                             <div className="aspect-[2/1] bg-slate-50 rounded-xl flex items-center justify-center border border-dashed border-slate-200">
-                                <p className="text-slate-400 font-medium">Revenue graph will appear here</p>
+                                <p className="text-slate-400 font-medium">Revenue chart data is not available yet.</p>
                             </div>
                             <div className="mt-6 grid grid-cols-3 gap-4">
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                                     <p className="text-xs text-slate-500 font-bold uppercase mb-1">Pending</p>
-                                    <p className="text-lg font-black text-slate-900">${stats?.pendingRevenue?.toLocaleString()}</p>
+                                    <p className="text-lg font-black text-slate-900">{formatCurrency(stats?.pendingRevenue)}</p>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                                     <p className="text-xs text-slate-500 font-bold uppercase mb-1">Paid</p>
-                                    <p className="text-lg font-black text-slate-900">${stats?.paidRevenue?.toLocaleString()}</p>
+                                    <p className="text-lg font-black text-slate-900">{formatCurrency(stats?.paidRevenue)}</p>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                                     <p className="text-xs text-slate-500 font-bold uppercase mb-1">Completed</p>
-                                    <p className="text-lg font-black text-slate-900">${stats?.completedRevenue?.toLocaleString()}</p>
+                                    <p className="text-lg font-black text-slate-900">{formatCurrency(stats?.completedRevenue)}</p>
                                 </div>
                             </div>
                         </div>

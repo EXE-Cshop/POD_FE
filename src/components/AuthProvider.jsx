@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import api, { refreshSession } from '../services/api';
+import api, { getCurrentUser } from '../services/api';
 import { authStorage } from '../utils/authStorage';
 
 const AuthContext = createContext(null);
@@ -12,12 +12,11 @@ const AuthProvider = ({ children }) => {
 
     const restoreSession = async () => {
         try {
-            const userData = await refreshSession();
-            if (userData) {
-                setUser(userData);
+            const currentUser = await getCurrentUser();
+            if (currentUser) {
+                setUser(currentUser);
             }
-        } catch (error) {
-            console.error('Failed to restore session:', error);
+        } catch {
             setUser(null);
         } finally {
             setLoading(false);

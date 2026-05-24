@@ -97,6 +97,11 @@ api.interceptors.response.use(
     }
 );
 
+export const getCurrentUser = async () => {
+    const res = await api.get('/users/me');
+    return res.data?.data || res.data;
+};
+
 export const authService = {
     login: (data) => api.post('/auth/login', data),
     register: (data) => api.post('/auth/register', data),
@@ -110,65 +115,79 @@ export const adminService = {
 
 export const orderService = {
     getOrders: (params) => api.get('/orders', { params }),
-    checkout: (data) => api.post(`${API_ORIGIN}/api/checkout`, data),
+    getMyOrders: (params) => api.get('/orders/me', { params }),
+    getMyOrderDetail: (id) => api.get(`/orders/me/${id}`),
+    checkout: (data) => api.post('/checkout', data),
 };
 
-export const baseProductService = {
-    getAll: (params) => api.get('/base-products', { params }),
-    getById: (id) => api.get(`/base-products/${id}`),
-    create: (data) => api.post('/base-products', data),
-    update: (id, data) => api.put(`/base-products/${id}`, data),
-    delete: (id) => api.delete(`/base-products/${id}`),
+export const productService = {
+    getAll: (params) => api.get('/products', { params }),
+    getById: (id) => api.get(`/products/${id}`),
+    getDetail: (id) => api.get(`/products/${id}/detail`),
+    getBySlug: (slug) => api.get(`/products/slug/${slug}`),
+    getTrending: () => api.get('/products/trending'),
+    getFeatured: () => api.get('/products/featured'),
+    create: (data) => api.post('/products', data),
+    update: (id, data) => api.put(`/products/${id}`, data),
+    delete: (id) => api.delete(`/products/${id}`),
 };
 
-export const productVariantService = {
-    getByBaseProductId: (baseProductId) => api.get('/product-variants', { params: { baseProductId, page: 1, pageSize: 50, active: true } }),
+export const categoryService = {
+    getAll: () => api.get('/categories'),
+    getBySlug: (slug) => api.get(`/categories/${slug}`),
+    create: (data) => api.post('/categories', data),
+    update: (id, data) => api.put(`/categories/${id}`, data),
+    delete: (id) => api.delete(`/categories/${id}`),
+};
+
+export const reviewService = {
+    getByProduct: (productId) => api.get(`/products/${productId}/reviews`),
+    create: (productId, data) => api.post(`/products/${productId}/reviews`, data),
+    update: (id, data) => api.put(`/reviews/${id}`, data),
+    delete: (id) => api.delete(`/reviews/${id}`),
+};
+
+export const wishlistService = {
+    get: () => api.get('/wishlist'),
+    add: (productId) => api.post(`/wishlist/${productId}`),
+    remove: (productId) => api.delete(`/wishlist/${productId}`),
+};
+
+export const promotionService = {
+    getAll: () => api.get('/promotions'),
+    getActive: () => api.get('/promotions/active'),
+    create: (data) => api.post('/promotions', data),
+    update: (id, data) => api.put(`/promotions/${id}`, data),
+    delete: (id) => api.delete(`/promotions/${id}`),
+    validate: (code) => api.post('/promotions/validate', { code }),
 };
 
 export const rolesService = {
     getRoles: () => api.get('/roles'),
+    getRole: (id) => api.get(`/roles/${id}`),
+    createRole: (data) => api.post('/roles', data),
+    updateRole: (id, data) => api.put(`/roles/${id}`, data),
+    deleteRole: (id) => api.delete(`/roles/${id}`),
 };
 
-export const renderService = {
-    /** POST /api/v1/renders/print - Render production print file from mm-based layers */
-    renderPrintFile: (body) => api.post('/renders/print', body),
+export const permissionsService = {
+    getPermissions: () => api.get('/permissions'),
 };
 
-export const stickerService = {
-    getAll: () => api.get('/stickers'),
-    getById: (id) => api.get(`/stickers/${id}`),
-    create: (data) => api.post('/stickers', data),
-    /** Upload file lên Cloudinary và tạo sticker trong kho */
-    upload: (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        return api.post('/stickers/upload', formData, {
-            headers: { 'Content-Type': undefined },
-        });
-    },
-    update: (id, data) => api.put(`/stickers/${id}`, data),
-    delete: (id) => api.delete(`/stickers/${id}`),
-};
-
-export const designProductService = {
-    getPublic: () => api.get('/design-products/public'),
-    getMyDesigns: () => api.get('/design-products/my'),
-    getById: (id) => api.get(`/design-products/${id}`),
-    create: (data) => api.post('/design-products', data),
-    update: (id, data) => api.put(`/design-products/${id}`, data),
-    setPublic: (id, value) => api.patch(`/design-products/${id}/public`, null, { params: { value } }),
-    delete: (id) => api.delete(`/design-products/${id}`),
+export const usersService = {
+    getUsers: () => api.get('/users'),
+    getMe: () => api.get('/users/me'),
+    createUser: (data) => api.post('/users', data),
+    updateUser: (id, data) => api.put(`/users/${id}`, data),
+    deactivateUser: (id) => api.delete(`/users/${id}`),
 };
 
 export const cartService = {
     get: () => api.get('/cart'),
-    addItem: (productVariantId, quantity, { frontPrintUrl, backPrintUrl, customName } = {}) =>
+    addItem: (productVariantId, quantity) =>
         api.post('/cart/items', {
             productVariantId,
             quantity,
-            frontPrintUrl: frontPrintUrl || undefined,
-            backPrintUrl: backPrintUrl || undefined,
-            customName: customName || undefined,
         }),
     updateItem: (itemId, data) => api.put(`/cart/items/${itemId}`, typeof data === 'number' ? { quantity: data } : data),
     removeItem: (itemId) => api.delete(`/cart/items/${itemId}`),

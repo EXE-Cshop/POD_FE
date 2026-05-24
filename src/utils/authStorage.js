@@ -2,8 +2,6 @@
  * Hybrid auth storage: access token in memory, refresh token in httpOnly cookie.
  * Access token is lost on page refresh - restore via /auth/refresh (cookie sent automatically).
  */
-let accessTokenMemory = null;
-
 export const authStorage = {
     getAccessToken: () => null, // No longer stored in JS
 
@@ -24,5 +22,5 @@ export const authStorage = {
         sessionStorage.removeItem('pod_access_token');
     },
 
-    isAuthenticated: () => true, // We'll rely on the user object in AuthProvider
+    isAuthenticated: () => false,
 };

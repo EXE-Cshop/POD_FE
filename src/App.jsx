@@ -8,7 +8,6 @@ import UserDirectory from './pages/UserDirectory';
 import PrintQueue from './pages/PrintQueue';
 import Inventory from './pages/Inventory';
 import Roles from './pages/Roles';
-import DesignerPage from './pages/DesignerPage';
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import ProductDetails from './pages/ProductDetails';
@@ -16,15 +15,12 @@ import OrderHistory from './pages/OrderHistory';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import OrderSuccess from './pages/OrderSuccess';
-import PrintAreas from './pages/PrintAreas';
 import AuthLayout from './components/AuthLayout';
 import UserLogin from './pages/UserLogin';
 import UserRegister from './pages/UserRegister';
 import UserProfile from './pages/UserProfile';
-import VirtualTryOn from './pages/VirtualTryOn';
-import Upload from './pages/Upload';
-import CommunityDesigns from './pages/CommunityDesigns';
-import SmartWardrobe from './pages/SmartWardrobe';
+import CategoryProducts from './pages/CategoryProducts';
+import Wishlist from './pages/Wishlist';
 
 const Placeholder = ({ title }) => (
   <div className="p-6">
@@ -34,8 +30,8 @@ const Placeholder = ({ title }) => (
 );
 
 import AdminDashboard from './pages/AdminDashboard';
-import AdminStickers from './pages/AdminStickers';
-import SchedulerDashboard from './pages/SchedulerDashboard';
+import AdminCategories from './pages/AdminCategories';
+import AdminPromotions from './pages/AdminPromotions';
 import Forbidden403 from './pages/Forbidden403';
 
 function App() {
@@ -48,23 +44,19 @@ function App() {
           <Route path="/register" element={<UserRegister />} />
         </Route>
         <Route path="/403" element={<Forbidden403 />} />
-        <Route path="/design/:productId" element={<DesignerPage />} />
-        <Route path="/design" element={<DesignerPage />} />
 
         {/* User / Home routes */}
         <Route path="/home" element={<HomeLayout />}>
           <Route index element={<Home />} />
           <Route path="catalog" element={<Catalog />} />
-          <Route path="product/:id" element={<ProductDetails />} />
+          <Route path="product/:slug" element={<ProductDetails />} />
+          <Route path="categories/:slug" element={<CategoryProducts />} />
+          <Route path="wishlist" element={<Wishlist />} />
           <Route path="cart" element={<Cart />} />
           <Route path="checkout" element={<Checkout />} />
           <Route path="order-success" element={<OrderSuccess />} />
           <Route path="my-orders" element={<OrderHistory />} />
           <Route path="profile" element={<UserProfile />} />
-          <Route path="virtual-try-on" element={<VirtualTryOn />} />
-          <Route path="upload" element={<Upload />} />
-          <Route path="community-designs" element={<CommunityDesigns />} />
-          <Route path="smart-wardrobe" element={<SmartWardrobe />} />
         </Route>
 
         {/* Admin routes protected by ProtectedRoute */}
@@ -74,11 +66,9 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<UserDirectory />} />
             <Route path="orders" element={<PrintQueue />} />
-            <Route path="stickers" element={<AdminStickers />} />
-            <Route path="base-products" element={<Inventory />} />
-            <Route path="print-areas" element={<PrintAreas />} />
-            {/* <Route path="stickers" element={<AdminStickers />} /> */}
-            <Route path="scheduler" element={<SchedulerDashboard />} />
+            <Route path="categories" element={<AdminCategories />} />
+            <Route path="products" element={<Inventory />} />
+            <Route path="promotions" element={<AdminPromotions />} />
             <Route path="roles" element={<Roles />} />
           </Route>
         </Route>
